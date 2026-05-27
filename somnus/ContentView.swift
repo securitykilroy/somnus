@@ -1,24 +1,25 @@
-//
-//  ContentView.swift
-//  somnus
-//
-//  Created by Ric Messier on 5/26/26.
-//
-
 import SwiftUI
 
 struct ContentView: View {
+    @Environment(SleepStore.self) var store
+
     var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
+        TabView {
+            Tab("Overview", systemImage: "moon.fill") {
+                OverviewView()
+            }
+            Tab("Daily", systemImage: "calendar") {
+                DailyView()
+            }
+            Tab("Trends", systemImage: "chart.line.uptrend.xyaxis") {
+                TrendsView()
+            }
         }
-        .padding()
+        .task { await store.load() }
     }
 }
 
 #Preview {
     ContentView()
+        .environment(SleepStore())
 }
