@@ -90,4 +90,4 @@ Somnus requests read-only access to HealthKit. It never writes to HealthKit, nev
 
 ## License
 
-MIT License. See [LICENSE](LICENSE) for details.
+Released under the [CC0 1.0 Universal](LICENSE) public domain dedication. You may use, modify, and distribute this software for any purpose without restriction or attribution.
