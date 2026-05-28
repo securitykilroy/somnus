@@ -70,8 +70,6 @@ struct HRVTrendView: View {
                         AxisValueLabel(format: .dateTime.month().day())
                     }
                 }
-                .chartScrollableAxes(.horizontal)
-                .chartXVisibleDomain(length: TimeInterval(max(dailyHRV.count, 1) * 24 * 3600))
                 .frame(height: 200)
 
                 HStack(spacing: 12) {

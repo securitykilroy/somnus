@@ -6,6 +6,8 @@ struct SleepSession: Identifiable {
     let stages: [SleepStage]
     let movementSamples: [MovementSample]
     let normalizedTimeline: NormalizedSleepTimeline
+    let startTime: Date
+    let endTime: Date
 
     init(nightDate: Date, stages: [SleepStage], movementSamples: [MovementSample] = []) {
         self.id = UUID()
@@ -13,6 +15,8 @@ struct SleepSession: Identifiable {
         self.stages = stages
         self.movementSamples = movementSamples
         self.normalizedTimeline = SleepTimelineNormalizer.normalize(stages)
+        self.startTime = stages.min(by: { $0.startDate < $1.startDate })?.startDate ?? nightDate
+        self.endTime = stages.max(by: { $0.endDate < $1.endDate })?.endDate ?? nightDate
     }
 
     /// Copies a session with new movement samples, reusing the already-computed timeline
@@ -23,6 +27,8 @@ struct SleepSession: Identifiable {
         self.stages = original.stages
         self.movementSamples = movementSamples
         self.normalizedTimeline = original.normalizedTimeline
+        self.startTime = original.startTime
+        self.endTime = original.endTime
     }
 
     var totalSleep: TimeInterval {
@@ -154,14 +160,6 @@ struct SleepSession: Identifiable {
         awakeEvents
             .filter(\.isMovementConfirmed)
             .reduce(0) { $0 + $1.duration }
-    }
-
-    var startTime: Date {
-        stages.min(by: { $0.startDate < $1.startDate })?.startDate ?? nightDate
-    }
-
-    var endTime: Date {
-        stages.max(by: { $0.endDate < $1.endDate })?.endDate ?? nightDate
     }
 
     var transitionCount: Int {

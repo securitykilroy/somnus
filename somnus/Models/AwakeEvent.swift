@@ -1,13 +1,23 @@
 import Foundation
 
 struct MovementSample: Identifiable {
-    let id = UUID()
     let startDate: Date
     let endDate: Date
     let stepCount: Double
     let distance: Double
     let standHourCount: Double
     let sourceName: String?
+
+    var id: String {
+        [
+            startDate.timeIntervalSinceReferenceDate.description,
+            endDate.timeIntervalSinceReferenceDate.description,
+            stepCount.description,
+            distance.description,
+            standHourCount.description,
+            sourceName ?? "",
+        ].joined(separator: "|")
+    }
 
     init(
         startDate: Date,
@@ -33,7 +43,6 @@ enum AwakeEventClassification: String {
 }
 
 struct AwakeEvent: Identifiable {
-    let id = UUID()
     let startDate: Date
     let endDate: Date
     let duration: TimeInterval
@@ -45,6 +54,17 @@ struct AwakeEvent: Identifiable {
 
     var isMovementConfirmed: Bool {
         classification == .likelyOutOfBed
+    }
+
+    var id: String {
+        [
+            startDate.timeIntervalSinceReferenceDate.description,
+            endDate.timeIntervalSinceReferenceDate.description,
+            classification.rawValue,
+            stepCount.description,
+            distance.description,
+            standHourCount.description,
+        ].joined(separator: "|")
     }
 }
 

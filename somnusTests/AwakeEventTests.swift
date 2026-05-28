@@ -30,6 +30,53 @@ struct AwakeEventTests {
         #expect(session.likelyOutOfBedDuration == 12 * 60)
     }
 
+    @Test func derivedAwakeEventIdentityIsStableAcrossRecomputation() throws {
+        let start = date("2026-05-01 22:00")
+        let session = SleepSession(
+            nightDate: calendar.startOfDay(for: start.addingTimeInterval(9 * 3600)),
+            stages: [
+                SleepStage(startDate: start, endDate: start.addingTimeInterval(2 * 3600), type: .core),
+                SleepStage(startDate: start.addingTimeInterval(2 * 3600), endDate: start.addingTimeInterval(2.2 * 3600), type: .awake),
+                SleepStage(startDate: start.addingTimeInterval(2.2 * 3600), endDate: start.addingTimeInterval(7 * 3600), type: .rem),
+            ],
+            movementSamples: [
+                MovementSample(
+                    startDate: start.addingTimeInterval(2 * 3600 + 60),
+                    endDate: start.addingTimeInterval(2 * 3600 + 180),
+                    stepCount: 18,
+                    distance: 12
+                )
+            ]
+        )
+
+        let first = try #require(session.awakeEvents.first)
+        let second = try #require(session.awakeEvents.first)
+
+        #expect(first.id == second.id)
+    }
+
+    @Test func movementSampleIdentityIsDerivedFromSampleContent() {
+        let start = date("2026-05-01 22:00")
+        let first = MovementSample(
+            startDate: start,
+            endDate: start.addingTimeInterval(60),
+            stepCount: 4,
+            distance: 2,
+            standHourCount: 1,
+            sourceName: "Watch"
+        )
+        let second = MovementSample(
+            startDate: start,
+            endDate: start.addingTimeInterval(60),
+            stepCount: 4,
+            distance: 2,
+            standHourCount: 1,
+            sourceName: "Watch"
+        )
+
+        #expect(first.id == second.id)
+    }
+
     @Test func awakeEventWithoutMovementStaysRestlessInBed() {
         let start = date("2026-05-01 22:00")
         let session = SleepSession(

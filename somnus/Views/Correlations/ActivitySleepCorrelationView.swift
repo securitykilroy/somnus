@@ -6,9 +6,11 @@ struct ActivitySleepCorrelationView: View {
     let dailyCalories: [DailyMetricSample]
 
     private struct Point: Identifiable {
-        let id = UUID()
+        let date: Date
         let calories: Double
         let sleepHours: Double
+
+        var id: Date { date }
     }
 
     private var points: [Point] {
@@ -20,11 +22,11 @@ struct ActivitySleepCorrelationView: View {
             let activityDay = Calendar.current.date(byAdding: .day, value: -1, to: session.nightDate)!
             guard let cals = calsByDay[Calendar.current.startOfDay(for: activityDay)],
                   cals > 0 else { return nil }
-            return Point(calories: cals, sleepHours: session.totalSleep.asHours)
+            return Point(date: session.nightDate, calories: cals, sleepHours: session.totalSleep.asHours)
         }
     }
 
-    private var regression: (slope: Double, intercept: Double)? {
+    private func regression(for points: [Point]) -> (slope: Double, intercept: Double)? {
         guard points.count >= 3 else { return nil }
         let n = Double(points.count)
         let xs = points.map(\.calories), ys = points.map(\.sleepHours)
@@ -38,6 +40,9 @@ struct ActivitySleepCorrelationView: View {
     }
 
     var body: some View {
+        let chartPoints = points
+        let regression = regression(for: chartPoints)
+
         VStack(alignment: .leading, spacing: 8) {
             Text("Activity vs Next Night's Sleep")
                 .font(.headline)
@@ -45,17 +50,17 @@ struct ActivitySleepCorrelationView: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
-            if points.isEmpty {
+            if chartPoints.isEmpty {
                 Text("No paired activity and sleep data available")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, minHeight: 120, alignment: .center)
             } else {
-                let xMin = points.map(\.calories).min()!
-                let xMax = points.map(\.calories).max()!
+                let xMin = chartPoints.map(\.calories).min()!
+                let xMax = chartPoints.map(\.calories).max()!
 
                 Chart {
-                    ForEach(points) { pt in
+                    ForEach(chartPoints) { pt in
                         PointMark(
                             x: .value("Calories", pt.calories),
                             y: .value("Sleep (h)", pt.sleepHours)

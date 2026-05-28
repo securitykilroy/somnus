@@ -3,7 +3,6 @@ import Charts
 
 struct SleepDebtChartView: View {
     let sessions: [SleepSession]
-    var visibleDays: Int? = nil
 
     enum DebtTarget: String, CaseIterable, Identifiable {
         case eightHours = "8 hrs"
@@ -49,8 +48,6 @@ struct SleepDebtChartView: View {
             }
             .chartYAxisLabel("Hours")
             .chartXAxis { AxisMarks(values: .automatic(desiredCount: 6)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.month().day()) } }
-            .chartScrollableAxes(.horizontal)
-            .chartXVisibleDomain(length: TimeInterval((visibleDays ?? max(sessions.count, 1)) * 24 * 3600))
             .frame(height: 200)
         }
         .padding()

@@ -3,7 +3,6 @@ import Charts
 
 struct ContinuityChartView: View {
     let sessions: [SleepSession]
-    var visibleDays: Int? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -31,8 +30,6 @@ struct ContinuityChartView: View {
             }
             .chartYAxisLabel("Awake hours")
             .chartXAxis { AxisMarks(values: .automatic(desiredCount: 6)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.month().day()) } }
-            .chartScrollableAxes(.horizontal)
-            .chartXVisibleDomain(length: TimeInterval((visibleDays ?? max(sessions.count, 1)) * 24 * 3600))
             .frame(height: 200)
         }
         .padding()

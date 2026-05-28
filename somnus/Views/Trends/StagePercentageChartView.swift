@@ -3,13 +3,15 @@ import Charts
 
 struct StagePercentageChartView: View {
     let sessions: [SleepSession]
-    var visibleDays: Int? = nil
 
     private struct Entry: Identifiable {
-        let id = UUID()
         let date: Date
         let type: SleepStageType
         let percent: Double
+
+        var id: String {
+            "\(date.timeIntervalSinceReferenceDate)|\(type.rawValue)"
+        }
     }
 
     private var entries: [Entry] {
@@ -45,8 +47,6 @@ struct StagePercentageChartView: View {
             ])
             .chartYAxisLabel("Percent")
             .chartXAxis { AxisMarks(values: .automatic(desiredCount: 6)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.month().day()) } }
-            .chartScrollableAxes(.horizontal)
-            .chartXVisibleDomain(length: TimeInterval((visibleDays ?? max(sessions.count, 1)) * 24 * 3600))
             .frame(height: 220)
         }
         .padding()

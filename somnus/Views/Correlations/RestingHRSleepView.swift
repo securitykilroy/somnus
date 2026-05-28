@@ -10,10 +10,6 @@ struct RestingHRSleepView: View {
         return dailyRestingHR.reduce(0) { $0 + $1.value } / Double(dailyRestingHR.count)
     }
 
-    private var domainLength: TimeInterval {
-        TimeInterval(max(sessions.count, 1) * 24 * 3600)
-    }
-
     private var xAxisMarks: some AxisContent {
         AxisMarks(values: .automatic(desiredCount: 6)) { _ in
             AxisGridLine()
@@ -67,8 +63,6 @@ struct RestingHRSleepView: View {
                 }
                 .chartYAxisLabel("bpm")
                 .chartXAxis { xAxisMarks }
-                .chartScrollableAxes(.horizontal)
-                .chartXVisibleDomain(length: domainLength)
                 .frame(height: 130)
 
                 Text("Sleep Duration")
@@ -92,8 +86,6 @@ struct RestingHRSleepView: View {
                 }
                 .chartYAxisLabel("hours")
                 .chartXAxis { xAxisMarks }
-                .chartScrollableAxes(.horizontal)
-                .chartXVisibleDomain(length: domainLength)
                 .frame(height: 130)
             }
         }
