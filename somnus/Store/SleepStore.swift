@@ -14,7 +14,7 @@ final class SleepStore {
     var dailyHRV: [DailyMetricSample] = []
     var sleepHeartRates: [Date: Double] = [:]
 
-    nonisolated let healthKit = HealthKitManager()
+    private let healthKit = HealthKitManager()
 
     var lastNight: SleepSession? { sessions.first }
 
@@ -59,53 +59,49 @@ final class SleepStore {
             try await healthKit.requestAuthorization()
             let fetched = try await healthKit.fetchAllSleepSamples()
             sessions = fetched
+
+            // Compute the window and filter lists here on the main actor, so the
+            // detached tasks receive plain Sendable values and never need to call
+            // back into actor-isolated code just to derive these.
+            let hk = healthKit
+            let window = Self.metricsFetchWindow(for: fetched)
+            let toEnrich  = fetched.filter { window.contains($0.nightDate) }
+            let forMetrics = fetched.filter { window.contains($0.nightDate) }
+
+            // Task.detached (not Task {}) so these run on the cooperative thread
+            // pool rather than inheriting @MainActor, keeping the UI responsive.
             Task.detached(priority: .utility) { [weak self] in
-                await self?.loadMovementEvidence(for: fetched)
+                guard let enriched = try? await hk.enrichSessionsWithMovement(toEnrich) else { return }
+                let byDate = Dictionary(uniqueKeysWithValues: enriched.map { ($0.nightDate, $0) })
+                await MainActor.run { [weak self] in
+                    guard let self else { return }
+                    guard sessions.map(\.nightDate) == fetched.map(\.nightDate) else { return }
+                    sessions = sessions.map { byDate[$0.nightDate] ?? $0 }
+                }
             }
             Task.detached(priority: .utility) { [weak self] in
-                await self?.loadMetrics(for: fetched)
+                async let cals    = hk.fetchDailyCalories(start: window.start, end: window.end)
+                async let rhr     = hk.fetchDailyMetrics(identifier: .restingHeartRate,
+                                                         unit: .count().unitDivided(by: .minute()),
+                                                         start: window.start, end: window.end)
+                async let hrv     = hk.fetchDailyMetrics(identifier: .heartRateVariabilitySDNN,
+                                                         unit: .secondUnit(with: .milli),
+                                                         start: window.start, end: window.end)
+                async let sleepHR = hk.fetchSleepHeartRates(sessions: forMetrics)
+                let calResult     = (try? await cals)    ?? []
+                let rhrResult     = (try? await rhr)     ?? []
+                let hrvResult     = (try? await hrv)     ?? []
+                let sleepHRResult = (try? await sleepHR) ?? [:]
+                await MainActor.run { [weak self] in
+                    guard let self else { return }
+                    dailyCalories   = calResult
+                    dailyRestingHR  = rhrResult
+                    dailyHRV        = hrvResult
+                    sleepHeartRates = sleepHRResult
+                }
             }
         } catch {
             self.error = error
-        }
-    }
-
-    private nonisolated func loadMovementEvidence(for fetched: [SleepSession]) async {
-        let window = SleepStore.metricsFetchWindow(for: fetched)
-        let sessionsToEnrich = fetched.filter { window.contains($0.nightDate) }
-        guard let enriched = try? await healthKit.enrichSessionsWithMovement(sessionsToEnrich) else { return }
-        let enrichedByDate = Dictionary(uniqueKeysWithValues: enriched.map { ($0.nightDate, $0) })
-        await MainActor.run { [weak self] in
-            guard let self else { return }
-            guard sessions.map(\.nightDate) == fetched.map(\.nightDate) else { return }
-            sessions = sessions.map { enrichedByDate[$0.nightDate] ?? $0 }
-        }
-    }
-
-    private nonisolated func loadMetrics(for fetched: [SleepSession]) async {
-        let window = SleepStore.metricsFetchWindow(for: fetched)
-        let sessionsForMetrics = fetched.filter { window.contains($0.nightDate) }
-
-        async let cals    = healthKit.fetchDailyCalories(start: window.start, end: window.end)
-        async let rhr     = healthKit.fetchDailyMetrics(identifier: .restingHeartRate,
-                                                        unit: .count().unitDivided(by: .minute()),
-                                                        start: window.start, end: window.end)
-        async let hrv     = healthKit.fetchDailyMetrics(identifier: .heartRateVariabilitySDNN,
-                                                        unit: .secondUnit(with: .milli),
-                                                        start: window.start, end: window.end)
-        async let sleepHR = healthKit.fetchSleepHeartRates(sessions: sessionsForMetrics)
-
-        let calResult     = (try? await cals)    ?? []
-        let rhrResult     = (try? await rhr)     ?? []
-        let hrvResult     = (try? await hrv)     ?? []
-        let sleepHRResult = (try? await sleepHR) ?? [:]
-
-        await MainActor.run { [weak self] in
-            guard let self else { return }
-            dailyCalories   = calResult
-            dailyRestingHR  = rhrResult
-            dailyHRV        = hrvResult
-            sleepHeartRates = sleepHRResult
         }
     }
 }
