@@ -1,17 +1,28 @@
 import Foundation
 
 struct SleepSession: Identifiable {
-    let id = UUID()
+    let id: UUID
     let nightDate: Date
     let stages: [SleepStage]
     let movementSamples: [MovementSample]
     let normalizedTimeline: NormalizedSleepTimeline
 
     init(nightDate: Date, stages: [SleepStage], movementSamples: [MovementSample] = []) {
+        self.id = UUID()
         self.nightDate = nightDate
         self.stages = stages
         self.movementSamples = movementSamples
         self.normalizedTimeline = SleepTimelineNormalizer.normalize(stages)
+    }
+
+    /// Copies a session with new movement samples, reusing the already-computed timeline
+    /// to avoid re-running the O(n²) normalizer when only movement evidence changes.
+    init(copying original: SleepSession, movementSamples: [MovementSample]) {
+        self.id = original.id
+        self.nightDate = original.nightDate
+        self.stages = original.stages
+        self.movementSamples = movementSamples
+        self.normalizedTimeline = original.normalizedTimeline
     }
 
     var totalSleep: TimeInterval {

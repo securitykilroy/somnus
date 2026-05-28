@@ -14,7 +14,7 @@ final class SleepStore {
     var dailyHRV: [DailyMetricSample] = []
     var sleepHeartRates: [Date: Double] = [:]
 
-    private let healthKit = HealthKitManager()
+    nonisolated let healthKit = HealthKitManager()
 
     var lastNight: SleepSession? { sessions.first }
 
@@ -59,26 +59,31 @@ final class SleepStore {
             try await healthKit.requestAuthorization()
             let fetched = try await healthKit.fetchAllSleepSamples()
             sessions = fetched
-            Task { await loadMovementEvidence(for: fetched) }
-            Task { await loadMetrics(for: fetched) }
+            Task.detached(priority: .utility) { [weak self] in
+                await self?.loadMovementEvidence(for: fetched)
+            }
+            Task.detached(priority: .utility) { [weak self] in
+                await self?.loadMetrics(for: fetched)
+            }
         } catch {
             self.error = error
         }
     }
 
-    private func loadMovementEvidence(for fetched: [SleepSession]) async {
-        let window = Self.metricsFetchWindow(for: fetched)
+    private nonisolated func loadMovementEvidence(for fetched: [SleepSession]) async {
+        let window = SleepStore.metricsFetchWindow(for: fetched)
         let sessionsToEnrich = fetched.filter { window.contains($0.nightDate) }
         guard let enriched = try? await healthKit.enrichSessionsWithMovement(sessionsToEnrich) else { return }
         let enrichedByDate = Dictionary(uniqueKeysWithValues: enriched.map { ($0.nightDate, $0) })
-
-        let currentDates = sessions.map(\.nightDate)
-        guard currentDates == fetched.map(\.nightDate) else { return }
-        sessions = sessions.map { enrichedByDate[$0.nightDate] ?? $0 }
+        await MainActor.run { [weak self] in
+            guard let self else { return }
+            guard sessions.map(\.nightDate) == fetched.map(\.nightDate) else { return }
+            sessions = sessions.map { enrichedByDate[$0.nightDate] ?? $0 }
+        }
     }
 
-    private func loadMetrics(for fetched: [SleepSession]) async {
-        let window = Self.metricsFetchWindow(for: fetched)
+    private nonisolated func loadMetrics(for fetched: [SleepSession]) async {
+        let window = SleepStore.metricsFetchWindow(for: fetched)
         let sessionsForMetrics = fetched.filter { window.contains($0.nightDate) }
 
         async let cals    = healthKit.fetchDailyCalories(start: window.start, end: window.end)
@@ -90,9 +95,17 @@ final class SleepStore {
                                                         start: window.start, end: window.end)
         async let sleepHR = healthKit.fetchSleepHeartRates(sessions: sessionsForMetrics)
 
-        dailyCalories   = (try? await cals)    ?? []
-        dailyRestingHR  = (try? await rhr)     ?? []
-        dailyHRV        = (try? await hrv)     ?? []
-        sleepHeartRates = (try? await sleepHR) ?? [:]
+        let calResult     = (try? await cals)    ?? []
+        let rhrResult     = (try? await rhr)     ?? []
+        let hrvResult     = (try? await hrv)     ?? []
+        let sleepHRResult = (try? await sleepHR) ?? [:]
+
+        await MainActor.run { [weak self] in
+            guard let self else { return }
+            dailyCalories   = calResult
+            dailyRestingHR  = rhrResult
+            dailyHRV        = hrvResult
+            sleepHeartRates = sleepHRResult
+        }
     }
 }

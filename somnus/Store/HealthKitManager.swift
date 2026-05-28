@@ -1,7 +1,7 @@
 import Foundation
 import HealthKit
 
-final class HealthKitManager {
+final class HealthKitManager: @unchecked Sendable {
     private let store = HKHealthStore()
 
     @MainActor
@@ -59,8 +59,7 @@ final class HealthKitManager {
             )
             enriched.append(
                 SleepSession(
-                    nightDate: session.nightDate,
-                    stages: session.stages,
+                    copying: session,
                     movementSamples: try await movementSamples + standSamples
                 )
             )
