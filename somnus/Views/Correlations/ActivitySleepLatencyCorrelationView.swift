@@ -1,38 +1,52 @@
 import SwiftUI
 import Charts
 
-struct SleepHRActivityView: View {
+struct ActivitySleepLatencyCorrelationView: View {
     let sessions: [SleepSession]
-    let sleepHeartRates: [Date: Double]
     let dailyCalories: [DailyMetricSample]
 
-    private struct Point: Identifiable {
+    struct Point: Identifiable {
         let date: Date
         let calories: Double
-        let sleepHR: Double
+        let latencyMinutes: Double
 
         var id: Date { date }
     }
 
-    private var points: [Point] {
+    static func points(
+        sessions: [SleepSession],
+        dailyCalories: [DailyMetricSample],
+        calendar: Calendar = .current
+    ) -> [Point] {
         let calsByDay = Dictionary(
-            dailyCalories.map { (Calendar.current.startOfDay(for: $0.date), $0.value) },
+            dailyCalories.map { (calendar.startOfDay(for: $0.date), $0.value) },
             uniquingKeysWith: { $1 }
         )
         return sessions.compactMap { session in
-            let activityDay = Calendar.current.date(byAdding: .day, value: -1, to: session.nightDate)!
-            guard let cals = calsByDay[Calendar.current.startOfDay(for: activityDay)],
-                  let hr = sleepHeartRates[session.nightDate],
-                  cals > 0 else { return nil }
-            return Point(date: session.nightDate, calories: cals, sleepHR: hr)
+            let activityDay = calendar.date(byAdding: .day, value: -1, to: session.nightDate)!
+            let latencyMinutes = session.sleepLatency / 60
+            guard let cals = calsByDay[calendar.startOfDay(for: activityDay)],
+                  cals > 0,
+                  latencyMinutes > 0 else { return nil }
+            return Point(
+                date: session.nightDate,
+                calories: cals,
+                latencyMinutes: latencyMinutes
+            )
         }
+    }
+
+    private var points: [Point] {
+        Self.points(sessions: sessions, dailyCalories: dailyCalories)
     }
 
     private func regression(for points: [Point]) -> (slope: Double, intercept: Double)? {
         guard points.count >= 3 else { return nil }
         let n = Double(points.count)
-        let xs = points.map(\.calories), ys = points.map(\.sleepHR)
-        let sumX = xs.reduce(0, +), sumY = ys.reduce(0, +)
+        let xs = points.map(\.calories)
+        let ys = points.map(\.latencyMinutes)
+        let sumX = xs.reduce(0, +)
+        let sumY = ys.reduce(0, +)
         let sumXY = zip(xs, ys).reduce(0) { $0 + $1.0 * $1.1 }
         let sumX2 = xs.reduce(0) { $0 + $1 * $1 }
         let denom = n * sumX2 - sumX * sumX
@@ -46,14 +60,14 @@ struct SleepHRActivityView: View {
         let regression = regression(for: chartPoints)
 
         VStack(alignment: .leading, spacing: 8) {
-            Text("Avg Sleep Heart Rate vs Activity")
+            Text("Activity vs Sleep Latency")
                 .font(.headline)
-            Text("Active calories on day N vs average heart rate during sleep that night")
+            Text("Active calories on day N vs time to fall asleep that night")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
             if chartPoints.isEmpty {
-                Text("No paired heart rate and activity data available — requires Apple Watch")
+                Text("No paired activity and sleep latency data available")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, minHeight: 120, alignment: .center)
@@ -65,9 +79,9 @@ struct SleepHRActivityView: View {
                     ForEach(chartPoints) { pt in
                         PointMark(
                             x: .value("Calories", pt.calories),
-                            y: .value("Sleep HR (bpm)", pt.sleepHR)
+                            y: .value("Latency (min)", pt.latencyMinutes)
                         )
-                        .foregroundStyle(Color.orange.opacity(0.7))
+                        .foregroundStyle(Color.orange.opacity(0.75))
                         .symbolSize(40)
                     }
 
@@ -79,21 +93,21 @@ struct SleepHRActivityView: View {
                         ForEach(Array(linePoints.enumerated()), id: \.offset) { _, pt in
                             LineMark(
                                 x: .value("Calories", pt.x),
-                                y: .value("Sleep HR (bpm)", pt.y)
+                                y: .value("Latency (min)", pt.y)
                             )
-                            .foregroundStyle(Color.orange.opacity(0.4))
+                            .foregroundStyle(Color.orange.opacity(0.45))
                             .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [5]))
                         }
                     }
                 }
                 .chartXAxisLabel("Active Calories")
-                .chartYAxisLabel("bpm")
+                .chartYAxisLabel("Latency (min)")
                 .frame(height: 220)
 
                 if let reg = regression {
-                    let direction = reg.slope <= 0
-                        ? "more activity → lower sleep HR (recovery response)"
-                        : "more activity → higher sleep HR"
+                    let direction = reg.slope >= 0
+                        ? "more activity -> longer sleep latency"
+                        : "more activity -> shorter sleep latency"
                     Text(direction)
                         .font(.caption)
                         .foregroundStyle(.secondary)

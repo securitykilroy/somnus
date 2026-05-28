@@ -4,6 +4,11 @@ import HealthKit
 final class HealthKitManager: @unchecked Sendable {
     private let store = HKHealthStore()
 
+    struct TimedQuantitySample {
+        let startDate: Date
+        let value: Double
+    }
+
     @MainActor
     func requestAuthorization() async throws {
         guard HKHealthStore.isHealthDataAvailable() else {
@@ -277,8 +282,11 @@ final class HealthKitManager: @unchecked Sendable {
 
     func fetchSleepHeartRates(sessions: [SleepSession]) async throws -> [Date: Double] {
         guard !sessions.isEmpty else { return [:] }
-        let start = sessions.map(\.startTime).min()!
-        let end = sessions.map(\.endTime).max()!
+        let windows = sessions
+            .map { SessionWindow(nightDate: $0.nightDate, start: $0.startTime, end: $0.endTime) }
+            .sorted { $0.start < $1.start }
+        let start = windows.map(\.start).min()!
+        let end = windows.map(\.end).max()!
         let hrType = HKQuantityType.quantityType(forIdentifier: .heartRate)!
         let predicate = HKQuery.predicateForSamples(withStart: start, end: end)
         let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
@@ -297,16 +305,61 @@ final class HealthKitManager: @unchecked Sendable {
             store.execute(query)
         }
 
-        let hrSamples = raw.compactMap { $0 as? HKQuantitySample }
-        var result: [Date: Double] = [:]
-        for session in sessions {
-            let inWindow = hrSamples.filter {
-                $0.startDate >= session.startTime && $0.startDate < session.endTime
-            }
-            guard !inWindow.isEmpty else { continue }
-            let avg = inWindow.reduce(0.0) { $0 + $1.quantity.doubleValue(for: unit) } / Double(inWindow.count)
-            result[session.nightDate] = avg
+        let hrSamples = raw.compactMap { sample -> TimedQuantitySample? in
+            guard let sample = sample as? HKQuantitySample else { return nil }
+            return TimedQuantitySample(
+                startDate: sample.startDate,
+                value: sample.quantity.doubleValue(for: unit)
+            )
         }
+        return Self.averageSamplesBySession(samples: hrSamples, windows: windows)
+    }
+
+    private struct SessionWindow {
+        let nightDate: Date
+        let start: Date
+        let end: Date
+    }
+
+    static func averageSamplesBySession(
+        samples: [TimedQuantitySample],
+        sessions: [SleepSession]
+    ) -> [Date: Double] {
+        let windows = sessions
+            .map { SessionWindow(nightDate: $0.nightDate, start: $0.startTime, end: $0.endTime) }
+            .sorted { $0.start < $1.start }
+        return averageSamplesBySession(samples: samples, windows: windows)
+    }
+
+    private static func averageSamplesBySession(
+        samples: [TimedQuantitySample],
+        windows: [SessionWindow]
+    ) -> [Date: Double] {
+        guard !samples.isEmpty, !windows.isEmpty else { return [:] }
+        let sortedSamples = samples.sorted { $0.startDate < $1.startDate }
+        var result: [Date: Double] = [:]
+        var sampleIndex = 0
+
+        for window in windows {
+            while sampleIndex < sortedSamples.count && sortedSamples[sampleIndex].startDate < window.start {
+                sampleIndex += 1
+            }
+
+            var scanIndex = sampleIndex
+            var total = 0.0
+            var count = 0
+            while scanIndex < sortedSamples.count && sortedSamples[scanIndex].startDate < window.end {
+                total += sortedSamples[scanIndex].value
+                count += 1
+                scanIndex += 1
+            }
+            sampleIndex = scanIndex
+
+            if count > 0 {
+                result[window.nightDate] = total / Double(count)
+            }
+        }
+
         return result
     }
 

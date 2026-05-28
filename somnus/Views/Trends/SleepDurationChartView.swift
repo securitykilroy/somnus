@@ -3,7 +3,6 @@ import Charts
 
 struct SleepDurationChartView: View {
     let sessions: [SleepSession]
-    var visibleDays: Int? = nil
 
     private var mean: TimeInterval {
         guard !sessions.isEmpty else { return 0 }
@@ -48,8 +47,6 @@ struct SleepDurationChartView: View {
             }
             .chartYAxisLabel("Hours")
             .chartXAxis { AxisMarks(values: .automatic(desiredCount: xAxisCount)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.month().day()) } }
-            .chartScrollableAxes(.horizontal)
-            .chartXVisibleDomain(length: TimeInterval((visibleDays ?? max(sessions.count, 1)) * 24 * 3600))
             .frame(height: 200)
         }
         .padding()

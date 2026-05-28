@@ -3,13 +3,15 @@ import Charts
 
 struct StageBreakdownChartView: View {
     let sessions: [SleepSession]
-    var visibleDays: Int? = nil
 
     private struct Entry: Identifiable {
-        let id = UUID()
         let date: Date
         let type: SleepStageType
         let hours: Double
+
+        var id: String {
+            "\(date.timeIntervalSinceReferenceDate)|\(type.rawValue)"
+        }
     }
 
     // Stacked in display order: deep at base, then core, rem, awake on top
@@ -55,8 +57,6 @@ struct StageBreakdownChartView: View {
             .chartLegend(position: .bottom, alignment: .leading)
             .chartYAxisLabel("Hours")
             .chartXAxis { AxisMarks(values: .automatic(desiredCount: 6)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.month().day()) } }
-            .chartScrollableAxes(.horizontal)
-            .chartXVisibleDomain(length: TimeInterval((visibleDays ?? max(sessions.count, 1)) * 24 * 3600))
             .frame(height: 220)
         }
         .padding()

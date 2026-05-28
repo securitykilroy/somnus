@@ -38,18 +38,68 @@ enum TrendZoom: String, CaseIterable, Identifiable {
     }
 }
 
+enum TrendWindow {
+    static func rangeStart(
+        for range: TrendRange,
+        endingAt end: Date,
+        calendar: Calendar = .current
+    ) -> Date {
+        calendar.date(byAdding: .day, value: -range.days, to: end) ?? end
+    }
+
+    static func sessions(
+        _ sessions: [SleepSession],
+        range: TrendRange,
+        endingAt end: Date,
+        calendar: Calendar = .current
+    ) -> [SleepSession] {
+        let start = rangeStart(for: range, endingAt: end, calendar: calendar)
+        return sessions
+            .filter { $0.nightDate >= start && $0.nightDate <= end }
+            .sorted { $0.nightDate < $1.nightDate }
+    }
+
+    static func visibleSessions(
+        _ sessions: [SleepSession],
+        zoom: TrendZoom,
+        endingAt end: Date,
+        calendar: Calendar = .current
+    ) -> [SleepSession] {
+        guard let days = zoom.days,
+              let start = calendar.date(byAdding: .day, value: -days, to: end) else {
+            return sessions
+        }
+        return sessions.filter { $0.nightDate >= start && $0.nightDate <= end }
+    }
+
+    static func metrics(
+        _ samples: [DailyMetricSample],
+        range: TrendRange,
+        zoom: TrendZoom,
+        endingAt end: Date,
+        calendar: Calendar = .current
+    ) -> [DailyMetricSample] {
+        let rangeStart = rangeStart(for: range, endingAt: end, calendar: calendar)
+        let visibleStart = zoom.days.flatMap {
+            calendar.date(byAdding: .day, value: -$0, to: end)
+        }
+        let start = visibleStart.map { max(rangeStart, $0) } ?? rangeStart
+        return samples.filter { $0.date >= start && $0.date <= end }
+    }
+}
+
 struct TrendsView: View {
     @Environment(SleepStore.self) var store
     @State private var range: TrendRange = .week
     @State private var zoom: TrendZoom = .all
-
-    private var rangeEnd: Date { Date() }
-    private var rangeStart: Date {
-        Calendar.current.date(byAdding: .day, value: -range.days, to: rangeEnd)!
-    }
+    @State private var rangeEnd = Date()
 
     private var sessions: [SleepSession] {
-        store.sessions(in: rangeStart...rangeEnd).sorted { $0.nightDate < $1.nightDate }
+        TrendWindow.sessions(store.sessions, range: range, endingAt: rangeEnd)
+    }
+
+    private var visibleSessions: [SleepSession] {
+        TrendWindow.visibleSessions(sessions, zoom: effectiveZoom, endingAt: rangeEnd)
     }
 
     var body: some View {
@@ -73,30 +123,30 @@ struct TrendsView: View {
                     if store.isLoading {
                         ProgressView()
                             .frame(maxWidth: .infinity, minHeight: 200)
-                    } else if sessions.isEmpty {
+                    } else if visibleSessions.isEmpty {
                         ContentUnavailableView(
                             "No Data",
                             systemImage: "chart.xyaxis.line",
                             description: Text("No sleep data in the selected time range.")
                         )
                     } else {
-                        let summary = SleepTrendSummary(sessions: sessions, targetSleep: 8 * 3600)
+                        let summary = SleepTrendSummary(sessions: visibleSessions, targetSleep: 8 * 3600)
 
                         TrendSummaryView(summary: summary)
                             .padding(.horizontal)
-                        SleepDurationChartView(sessions: sessions, visibleDays: visibleDays)
+                        SleepDurationChartView(sessions: visibleSessions)
                             .padding(.horizontal)
-                        SleepDebtChartView(sessions: sessions, visibleDays: visibleDays)
+                        SleepDebtChartView(sessions: visibleSessions)
                             .padding(.horizontal)
-                        ContinuityChartView(sessions: sessions, visibleDays: visibleDays)
+                        ContinuityChartView(sessions: visibleSessions)
                             .padding(.horizontal)
-                        MovementWakeChartView(sessions: sessions, visibleDays: visibleDays)
+                        MovementWakeChartView(sessions: visibleSessions)
                             .padding(.horizontal)
-                        RegularityChartView(sessions: sessions, visibleDays: visibleDays)
+                        RegularityChartView(sessions: visibleSessions)
                             .padding(.horizontal)
-                        StageBreakdownChartView(sessions: sessions, visibleDays: visibleDays)
+                        StageBreakdownChartView(sessions: visibleSessions)
                             .padding(.horizontal)
-                        StagePercentageChartView(sessions: sessions, visibleDays: visibleDays)
+                        StagePercentageChartView(sessions: visibleSessions)
                             .padding(.horizontal)
                         OutlierListView(outliers: summary.outliers)
                             .padding(.horizontal)
@@ -106,13 +156,16 @@ struct TrendsView: View {
                 }
                 .padding(.vertical)
             }
-            .refreshable { await store.load() }
+            .refreshable {
+                rangeEnd = Date()
+                await store.load()
+            }
             .navigationTitle("Trends")
         }
     }
 
-    private var visibleDays: Int? {
-        range.days <= 30 ? nil : zoom.days
+    private var effectiveZoom: TrendZoom {
+        range.days <= 30 ? .all : zoom
     }
 
     @ViewBuilder
@@ -130,25 +183,31 @@ struct TrendsView: View {
         .padding(.top, 8)
 
         ActivitySleepCorrelationView(
-            sessions: sessions,
+            sessions: visibleSessions,
+            dailyCalories: filteredCalories
+        )
+        .padding(.horizontal)
+
+        ActivitySleepLatencyCorrelationView(
+            sessions: visibleSessions,
             dailyCalories: filteredCalories
         )
         .padding(.horizontal)
 
         HRVTrendView(
             dailyHRV: filteredHRV,
-            sessions: sessions
+            sessions: visibleSessions
         )
         .padding(.horizontal)
 
         RestingHRSleepView(
-            sessions: sessions,
+            sessions: visibleSessions,
             dailyRestingHR: filteredRestingHR
         )
         .padding(.horizontal)
 
         SleepHRActivityView(
-            sessions: sessions,
+            sessions: visibleSessions,
             sleepHeartRates: store.sleepHeartRates,
             dailyCalories: filteredCalories
         )
@@ -156,14 +215,14 @@ struct TrendsView: View {
     }
 
     private var filteredCalories: [DailyMetricSample] {
-        store.dailyCalories.filter { $0.date >= rangeStart && $0.date <= rangeEnd }
+        TrendWindow.metrics(store.dailyCalories, range: range, zoom: effectiveZoom, endingAt: rangeEnd)
     }
 
     private var filteredRestingHR: [DailyMetricSample] {
-        store.dailyRestingHR.filter { $0.date >= rangeStart && $0.date <= rangeEnd }
+        TrendWindow.metrics(store.dailyRestingHR, range: range, zoom: effectiveZoom, endingAt: rangeEnd)
     }
 
     private var filteredHRV: [DailyMetricSample] {
-        store.dailyHRV.filter { $0.date >= rangeStart && $0.date <= rangeEnd }
+        TrendWindow.metrics(store.dailyHRV, range: range, zoom: effectiveZoom, endingAt: rangeEnd)
     }
 }

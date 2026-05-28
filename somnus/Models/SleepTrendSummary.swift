@@ -1,12 +1,15 @@
 import Foundation
 
 struct SleepOutlier: Identifiable {
-    let id = UUID()
     let session: SleepSession
     let metric: String
     let value: TimeInterval
     let baseline: TimeInterval
     let deviation: TimeInterval
+
+    var id: String {
+        "\(session.id.uuidString)|\(metric)"
+    }
 }
 
 struct SleepTrendSummary {
