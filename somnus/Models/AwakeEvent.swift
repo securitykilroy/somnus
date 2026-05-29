@@ -100,7 +100,7 @@ enum AwakeEventDetector {
             )
         }
 
-        return (awakeEvents + inferredStandEvents(for: session, excluding: evidenceWindows))
+        return (awakeEvents + inferredMovementEvents(for: session, excluding: evidenceWindows))
             .sorted { $0.startDate < $1.startDate }
     }
 
@@ -109,6 +109,10 @@ enum AwakeEventDetector {
     }
 
     static func standEvidenceWindow(for session: SleepSession) -> DateInterval? {
+        sleepWindow(for: session)
+    }
+
+    static func sleepMovementEvidenceWindow(for session: SleepSession) -> DateInterval? {
         sleepWindow(for: session)
     }
 
@@ -153,43 +157,122 @@ enum AwakeEventDetector {
         }
     }
 
-    private static func inferredStandEvents(
+    private static func inferredMovementEvents(
         for session: SleepSession,
         excluding existingWindows: [DateInterval]
     ) -> [AwakeEvent] {
         guard let sleepWindow = sleepWindow(for: session) else { return [] }
 
-        return session.movementSamples
+        let movementClusters = clusteredMovementSamples(
+            session.movementSamples.filter { sample in
+                let window = sampleWindow(sample)
+                return (sample.stepCount > 0 || sample.distance > 0)
+                    && window.intersects(sleepWindow)
+                    && !existingWindows.contains(where: { $0.intersects(window) })
+            }
+        )
+
+        var events = movementClusters.compactMap { cluster -> AwakeEvent? in
+            inferredEvent(
+                from: cluster,
+                sleepWindow: sleepWindow,
+                movementSamples: session.movementSamples
+            )
+        }
+
+        let eventWindows = events.map { DateInterval(start: $0.startDate, end: $0.endDate) }
+        let standEvents = session.movementSamples
             .filter { $0.standHourCount > 0 }
             .compactMap { sample -> AwakeEvent? in
                 let sampleWindow = DateInterval(start: sample.startDate, end: sample.endDate)
                 guard sampleWindow.intersects(sleepWindow),
-                      !existingWindows.contains(where: { $0.intersects(sampleWindow) }) else {
+                      !existingWindows.contains(where: { $0.intersects(sampleWindow) }),
+                      !eventWindows.contains(where: { $0.intersects(sampleWindow) }) else {
                     return nil
                 }
 
-                let eventStart = max(sample.startDate, sleepWindow.start)
-                let availableDuration = min(sample.endDate, sleepWindow.end).timeIntervalSince(eventStart)
-                guard availableDuration > 0 else { return nil }
-
-                let eventDuration = min(10 * 60, max(60, availableDuration))
-                let eventEnd = min(eventStart.addingTimeInterval(eventDuration), sleepWindow.end)
-                return AwakeEvent(
-                    startDate: eventStart,
-                    endDate: eventEnd,
-                    duration: eventEnd.timeIntervalSince(eventStart),
-                    stepCount: sample.stepCount,
-                    distance: sample.distance,
-                    standHourCount: sample.standHourCount,
-                    classification: .likelyOutOfBed,
-                    confidence: confidence(
-                        for: .likelyOutOfBed,
-                        stepCount: sample.stepCount,
-                        distance: sample.distance,
-                        standHourCount: sample.standHourCount
-                    )
+                return inferredEvent(
+                    from: [sample],
+                    sleepWindow: sleepWindow,
+                    movementSamples: session.movementSamples
                 )
             }
+
+        events.append(contentsOf: standEvents)
+        return events
+    }
+
+    private static func clusteredMovementSamples(_ samples: [MovementSample]) -> [[MovementSample]] {
+        let sorted = samples.sorted { $0.startDate < $1.startDate }
+        var clusters: [[MovementSample]] = []
+
+        for sample in sorted {
+            guard var current = clusters.popLast() else {
+                clusters.append([sample])
+                continue
+            }
+
+            let currentEnd = current.map(\.endDate).max() ?? sample.endDate
+            if sample.startDate.timeIntervalSince(currentEnd) <= 5 * 60 {
+                current.append(sample)
+                clusters.append(current)
+            } else {
+                clusters.append(current)
+                clusters.append([sample])
+            }
+        }
+
+        return clusters
+    }
+
+    private static func inferredEvent(
+        from samples: [MovementSample],
+        sleepWindow: DateInterval,
+        movementSamples: [MovementSample]
+    ) -> AwakeEvent? {
+        guard let sampleStart = samples.map(\.startDate).min(),
+              let sampleEnd = samples.map(\.endDate).max() else {
+            return nil
+        }
+
+        let eventStart = max(sampleStart, sleepWindow.start)
+        let availableDuration = min(sampleEnd, sleepWindow.end).timeIntervalSince(eventStart)
+        guard availableDuration > 0 else { return nil }
+
+        let eventDuration = min(10 * 60, max(60, availableDuration))
+        let eventEnd = min(eventStart.addingTimeInterval(eventDuration), sleepWindow.end)
+        let evidenceWindow = DateInterval(
+            start: eventStart.addingTimeInterval(-2 * 60),
+            end: eventEnd.addingTimeInterval(5 * 60)
+        )
+        let evidence = movementEvidence(in: evidenceWindow, movementSamples: movementSamples)
+        let classification = classify(
+            stepCount: evidence.steps,
+            distance: evidence.distance,
+            standHourCount: evidence.standHours
+        )
+
+        guard classification != .restlessInBed else { return nil }
+
+        return AwakeEvent(
+            startDate: eventStart,
+            endDate: eventEnd,
+            duration: eventEnd.timeIntervalSince(eventStart),
+            stepCount: evidence.steps,
+            distance: evidence.distance,
+            standHourCount: evidence.standHours,
+            classification: classification,
+            confidence: confidence(
+                for: classification,
+                stepCount: evidence.steps,
+                distance: evidence.distance,
+                standHourCount: evidence.standHours
+            )
+        )
+    }
+
+    private static func sampleWindow(_ sample: MovementSample) -> DateInterval {
+        DateInterval(start: sample.startDate, end: sample.endDate)
     }
 
     private static func classify(

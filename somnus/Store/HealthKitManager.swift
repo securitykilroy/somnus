@@ -57,7 +57,7 @@ final class HealthKitManager: @unchecked Sendable {
 
         for session in sessions {
             async let movementSamples = fetchMovementSamples(
-                in: AwakeEventDetector.movementEvidenceWindows(for: session)
+                in: AwakeEventDetector.sleepMovementEvidenceWindow(for: session)
             )
             async let standSamples = fetchStandHourSamples(
                 in: AwakeEventDetector.standEvidenceWindow(for: session)
@@ -73,37 +73,69 @@ final class HealthKitManager: @unchecked Sendable {
         return enriched
     }
 
-    private func fetchMovementSamples(in windows: [DateInterval]) async throws -> [MovementSample] {
-        var samples: [MovementSample] = []
-        samples.reserveCapacity(windows.count)
+    private func fetchMovementSamples(in window: DateInterval?) async throws -> [MovementSample] {
+        guard let window else { return [] }
 
-        for window in windows {
-            async let steps = fetchCumulativeQuantity(
-                identifier: .stepCount,
-                unit: .count(),
-                start: window.start,
-                end: window.end
+        async let steps = fetchQuantityMovementSamples(
+            identifier: .stepCount,
+            unit: .count(),
+            in: window
+        ) { quantitySample, value in
+            MovementSample(
+                startDate: quantitySample.startDate,
+                endDate: quantitySample.endDate,
+                stepCount: value,
+                sourceName: quantitySample.sourceRevision.source.name
             )
-            async let distance = fetchCumulativeQuantity(
-                identifier: .distanceWalkingRunning,
-                unit: .meter(),
-                start: window.start,
-                end: window.end
+        }
+        async let distance = fetchQuantityMovementSamples(
+            identifier: .distanceWalkingRunning,
+            unit: .meter(),
+            in: window
+        ) { quantitySample, value in
+            MovementSample(
+                startDate: quantitySample.startDate,
+                endDate: quantitySample.endDate,
+                distance: value,
+                sourceName: quantitySample.sourceRevision.source.name
             )
-
-            let movement = try await MovementSample(
-                startDate: window.start,
-                endDate: window.end,
-                stepCount: steps,
-                distance: distance,
-                sourceName: "HealthKit"
-            )
-            if movement.stepCount > 0 || movement.distance > 0 {
-                samples.append(movement)
-            }
         }
 
-        return samples
+        return try await steps + distance
+    }
+
+    private func fetchQuantityMovementSamples(
+        identifier: HKQuantityTypeIdentifier,
+        unit: HKUnit,
+        in window: DateInterval,
+        makeSample: @escaping @Sendable (HKQuantitySample, Double) -> MovementSample
+    ) async throws -> [MovementSample] {
+        let quantityType = HKQuantityType.quantityType(forIdentifier: identifier)!
+        let predicate = HKQuery.predicateForSamples(withStart: window.start, end: window.end)
+        let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
+
+        let samples: [HKSample] = try await withCheckedThrowingContinuation { continuation in
+            let query = HKSampleQuery(
+                sampleType: quantityType,
+                predicate: predicate,
+                limit: HKObjectQueryNoLimit,
+                sortDescriptors: [sortDescriptor]
+            ) { _, result, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume(returning: result ?? [])
+                }
+            }
+            store.execute(query)
+        }
+
+        return samples.compactMap { sample in
+            guard let quantitySample = sample as? HKQuantitySample else { return nil }
+            let value = quantitySample.quantity.doubleValue(for: unit)
+            guard value > 0 else { return nil }
+            return makeSample(quantitySample, value)
+        }
     }
 
     private func fetchStandHourSamples(in window: DateInterval?) async throws -> [MovementSample] {

@@ -1,14 +1,14 @@
 import SwiftUI
 import Charts
 
-struct ActivitySleepLatencyCorrelationView: View {
+struct ActivitySleepContinuityCorrelationView: View {
     let sessions: [SleepSession]
     let dailyCalories: [DailyMetricSample]
 
     struct Point: Identifiable {
         let date: Date
         let calories: Double
-        let latencyMinutes: Double
+        let wasoMinutes: Double
 
         var id: Date { date }
     }
@@ -24,14 +24,13 @@ struct ActivitySleepLatencyCorrelationView: View {
         )
         return sessions.compactMap { session in
             let activityDay = calendar.date(byAdding: .day, value: -1, to: session.nightDate)!
-            let latencyMinutes = session.sleepLatency / 60
+            let wasoMinutes = session.wakeAfterSleepOnset / 60
             guard let cals = calsByDay[calendar.startOfDay(for: activityDay)],
-                  cals > 0,
-                  latencyMinutes > 0 else { return nil }
+                  cals > 0 else { return nil }
             return Point(
                 date: session.nightDate,
                 calories: cals,
-                latencyMinutes: latencyMinutes
+                wasoMinutes: wasoMinutes
             )
         }
     }
@@ -44,7 +43,7 @@ struct ActivitySleepLatencyCorrelationView: View {
         guard points.count >= 3 else { return nil }
         let n = Double(points.count)
         let xs = points.map(\.calories)
-        let ys = points.map(\.latencyMinutes)
+        let ys = points.map(\.wasoMinutes)
         let sumX = xs.reduce(0, +)
         let sumY = ys.reduce(0, +)
         let sumXY = zip(xs, ys).reduce(0) { $0 + $1.0 * $1.1 }
@@ -60,14 +59,14 @@ struct ActivitySleepLatencyCorrelationView: View {
         let regression = regression(for: chartPoints)
 
         VStack(alignment: .leading, spacing: 8) {
-            Text("Activity vs Sleep Latency")
+            Text("Activity vs Sleep Continuity")
                 .font(.headline)
-            Text("Active calories on day N vs time to fall asleep that night")
+            Text("Active calories on day N vs awake time after sleep onset that night")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
             if chartPoints.isEmpty {
-                Text("No paired activity and sleep latency data available")
+                Text("No paired activity and wake-after-sleep data available")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, minHeight: 120, alignment: .center)
@@ -79,7 +78,7 @@ struct ActivitySleepLatencyCorrelationView: View {
                     ForEach(chartPoints) { pt in
                         PointMark(
                             x: .value("Calories", pt.calories),
-                            y: .value("Latency (min)", pt.latencyMinutes)
+                            y: .value("WASO (min)", pt.wasoMinutes)
                         )
                         .foregroundStyle(Color.orange.opacity(0.75))
                         .symbolSize(40)
@@ -93,7 +92,7 @@ struct ActivitySleepLatencyCorrelationView: View {
                         ForEach(Array(linePoints.enumerated()), id: \.offset) { _, pt in
                             LineMark(
                                 x: .value("Calories", pt.x),
-                                y: .value("Latency (min)", pt.y)
+                                y: .value("WASO (min)", pt.y)
                             )
                             .foregroundStyle(Color.orange.opacity(0.45))
                             .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [5]))
@@ -101,13 +100,13 @@ struct ActivitySleepLatencyCorrelationView: View {
                     }
                 }
                 .chartXAxisLabel("Active Calories")
-                .chartYAxisLabel("Latency (min)")
+                .chartYAxisLabel("WASO (min)")
                 .frame(height: 220)
 
                 if let reg = regression {
                     let direction = reg.slope >= 0
-                        ? "more activity -> longer sleep latency"
-                        : "more activity -> shorter sleep latency"
+                        ? "more activity -> more wake after sleep onset"
+                        : "more activity -> less wake after sleep onset"
                     Text(direction)
                         .font(.caption)
                         .foregroundStyle(.secondary)

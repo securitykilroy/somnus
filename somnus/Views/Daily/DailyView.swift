@@ -42,10 +42,23 @@ struct DailyView: View {
                 }
             }
             .navigationTitle("Daily")
+            .toolbar {
+                if let exportURL = dailyExportURL {
+                    ShareLink(item: exportURL) {
+                        Image(systemName: "square.and.arrow.up")
+                    }
+                    .accessibilityLabel("Export Daily CSV")
+                }
+            }
             .onChange(of: store.sessions.count) {
                 selectedIndex = 0
             }
         }
+    }
+
+    private var dailyExportURL: URL? {
+        guard let currentSession else { return nil }
+        return try? CSVExporter.dailyFile(for: currentSession).writeTemporaryFile()
     }
 
     @ViewBuilder

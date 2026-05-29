@@ -161,6 +161,14 @@ struct TrendsView: View {
                 await store.load()
             }
             .navigationTitle("Trends")
+            .toolbar {
+                if let exportURL = trendsExportURL {
+                    ShareLink(item: exportURL) {
+                        Image(systemName: "square.and.arrow.up")
+                    }
+                    .accessibilityLabel("Export Trends CSV")
+                }
+            }
         }
     }
 
@@ -188,7 +196,7 @@ struct TrendsView: View {
         )
         .padding(.horizontal)
 
-        ActivitySleepLatencyCorrelationView(
+        ActivitySleepContinuityCorrelationView(
             sessions: visibleSessions,
             dailyCalories: filteredCalories
         )
@@ -224,5 +232,16 @@ struct TrendsView: View {
 
     private var filteredHRV: [DailyMetricSample] {
         TrendWindow.metrics(store.dailyHRV, range: range, zoom: effectiveZoom, endingAt: rangeEnd)
+    }
+
+    private var trendsExportURL: URL? {
+        guard !visibleSessions.isEmpty else { return nil }
+        return try? CSVExporter.trendsFile(
+            sessions: visibleSessions,
+            dailyCalories: filteredCalories,
+            dailyRestingHR: filteredRestingHR,
+            dailyHRV: filteredHRV,
+            sleepHeartRates: store.sleepHeartRates
+        ).writeTemporaryFile()
     }
 }

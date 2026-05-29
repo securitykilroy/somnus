@@ -23,18 +23,21 @@ Somnus pulls all sleep data recorded by your Apple Watch or third-party sleep-tr
 - **Awake event list** — each awakening classified as *Restless in Bed*, *Likely Out of Bed*, or *Unknown*, with a confidence score driven by step count, walking distance, and Apple Stand Hour data
 - **Hypnogram** — a timeline chart of sleep stages across the night (Core, Deep, REM, Awake, In Bed)
 - **Stage duration breakdown** — proportional bar chart of time spent in each stage
+- **CSV export** — share the selected night's summary, stage timeline, awake events, and movement evidence
 
 ### Trends Tab
 - **Sleep debt chart** — bar chart of nightly surplus/deficit vs. a selectable 7- or 8-hour target, with a scrollable horizontal axis
 - **Continuity chart** — multi-day view of fragmentation and awakening trends
 - **Regularity chart** — tracks how consistent your mid-sleep anchor time is night over night
 - **Movement/wake chart** — visualises out-of-bed events over time
+- **CSV export** — share the visible range and the metrics that drive the trend and correlation charts
 
 ### Correlation Views
 - **HRV trend** — daily HRV (SDNN) plotted against sleep duration
 - **Resting heart rate vs. sleep** — resting HR overlaid on nightly sleep totals
 - **Sleep HR trend** — average heart rate during each sleep window
 - **Activity vs. next night's sleep** — scatter plot of daytime active calories vs. subsequent sleep duration, with a linear regression trend line
+- **Activity vs. sleep continuity** — daytime active calories plotted against wake after sleep onset (WASO)
 
 ## Technical Architecture
 

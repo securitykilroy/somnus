@@ -180,13 +180,14 @@ struct SleepAnalysisTests {
         #expect(averages[sessions[1].nightDate] == 60)
     }
 
-    @Test func activityLatencyCorrelationPairsPreviousDayCaloriesWithSleepLatency() {
+    @Test func activityContinuityCorrelationPairsPreviousDayCaloriesWithWaso() {
         let bedStart = date("2026-05-02 22:00")
         let session = SleepSession(
             nightDate: calendar.startOfDay(for: bedStart.addingTimeInterval(8 * 3600)),
             stages: [
-                SleepStage(startDate: bedStart, endDate: bedStart.addingTimeInterval(30 * 60), type: .inBed),
-                SleepStage(startDate: bedStart.addingTimeInterval(30 * 60), endDate: bedStart.addingTimeInterval(8 * 3600), type: .core),
+                SleepStage(startDate: bedStart, endDate: bedStart.addingTimeInterval(2 * 3600), type: .core),
+                SleepStage(startDate: bedStart.addingTimeInterval(2 * 3600), endDate: bedStart.addingTimeInterval(2.25 * 3600), type: .awake),
+                SleepStage(startDate: bedStart.addingTimeInterval(2.25 * 3600), endDate: bedStart.addingTimeInterval(8 * 3600), type: .core),
             ]
         )
         let previousDay = calendar.startOfDay(for: bedStart)
@@ -195,7 +196,7 @@ struct SleepAnalysisTests {
             DailyMetricSample(date: calendar.date(byAdding: .day, value: -1, to: previousDay)!, value: 100),
         ]
 
-        let points = ActivitySleepLatencyCorrelationView.points(
+        let points = ActivitySleepContinuityCorrelationView.points(
             sessions: [session],
             dailyCalories: calories,
             calendar: calendar
@@ -203,7 +204,75 @@ struct SleepAnalysisTests {
 
         #expect(points.count == 1)
         #expect(points.first?.calories == 725)
-        #expect(points.first?.latencyMinutes == 30)
+        #expect(points.first?.wasoMinutes == 15)
+    }
+
+    @Test func trendsCSVExportsVisibleSessionAndMetricData() {
+        let start = date("2026-05-02 22:00")
+        let session = SleepSession(
+            nightDate: calendar.startOfDay(for: start.addingTimeInterval(8 * 3600)),
+            stages: [
+                SleepStage(startDate: start, endDate: start.addingTimeInterval(2 * 3600), type: .core),
+                SleepStage(startDate: start.addingTimeInterval(2 * 3600), endDate: start.addingTimeInterval(2.25 * 3600), type: .awake),
+                SleepStage(startDate: start.addingTimeInterval(2.25 * 3600), endDate: start.addingTimeInterval(8 * 3600), type: .deep),
+            ],
+            movementSamples: [
+                MovementSample(
+                    startDate: start.addingTimeInterval(2 * 3600 + 60),
+                    endDate: start.addingTimeInterval(2 * 3600 + 180),
+                    stepCount: 12,
+                    distance: 8,
+                    sourceName: "Watch"
+                )
+            ]
+        )
+        let caloriesDate = calendar.startOfDay(for: start)
+
+        let file = CSVExporter.trendsFile(
+            sessions: [session],
+            dailyCalories: [DailyMetricSample(date: caloriesDate, value: 650)],
+            dailyRestingHR: [DailyMetricSample(date: session.nightDate, value: 55)],
+            dailyHRV: [DailyMetricSample(date: session.nightDate, value: 42)],
+            sleepHeartRates: [session.nightDate: 58],
+            calendar: calendar
+        )
+
+        #expect(file.filename == "somnus-trends-2026-05-03-to-2026-05-03.csv")
+        #expect(file.content.contains("night_date,bedtime,wake_time,total_sleep_minutes"))
+        #expect(file.content.contains("2026-05-03"))
+        #expect(file.content.contains(",650,55,42,58"))
+        #expect(file.content.contains(",15,1,1,15,"))
+    }
+
+    @Test func dailyCSVExportsSummaryTimelineAwakeEventsAndMovement() {
+        let start = date("2026-05-02 22:00")
+        let session = SleepSession(
+            nightDate: calendar.startOfDay(for: start.addingTimeInterval(8 * 3600)),
+            stages: [
+                SleepStage(startDate: start, endDate: start.addingTimeInterval(2 * 3600), type: .core, sourceName: "Watch"),
+                SleepStage(startDate: start.addingTimeInterval(2 * 3600), endDate: start.addingTimeInterval(2.25 * 3600), type: .awake, sourceName: "Watch"),
+                SleepStage(startDate: start.addingTimeInterval(2.25 * 3600), endDate: start.addingTimeInterval(8 * 3600), type: .rem, sourceName: "Watch"),
+            ],
+            movementSamples: [
+                MovementSample(
+                    startDate: start.addingTimeInterval(2 * 3600 + 60),
+                    endDate: start.addingTimeInterval(2 * 3600 + 180),
+                    stepCount: 12,
+                    distance: 8,
+                    standHourCount: 1,
+                    sourceName: "Watch"
+                )
+            ]
+        )
+
+        let file = CSVExporter.dailyFile(for: session, calendar: calendar)
+
+        #expect(file.filename == "somnus-daily-2026-05-03.csv")
+        #expect(file.content.contains("record_type,night_date,start,end,duration_minutes,metric,value,unit,stage_type,classification,confidence,steps,distance_meters,stand_hours,source"))
+        #expect(file.content.contains("summary,2026-05-03,,,465,total_sleep,465,minutes"))
+        #expect(file.content.contains("stage,2026-05-03,2026-05-02T22:00:00Z,2026-05-03T00:00:00Z,120,,,,Core"))
+        #expect(file.content.contains("awake_event,2026-05-03,2026-05-03T00:00:00Z,2026-05-03T00:15:00Z,15,,,,,Likely Out of Bed"))
+        #expect(file.content.contains("movement,2026-05-03,2026-05-03T00:01:00Z,2026-05-03T00:03:00Z,2,,,,,,,12,8,1,Watch"))
     }
 
     @MainActor
