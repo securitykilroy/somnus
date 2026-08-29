@@ -6,6 +6,8 @@ enum TrendRange: String, CaseIterable, Identifiable {
     case threeMonths = "3M"
     case sixMonths   = "6M"
     case year        = "1Y"
+    case twoYears    = "2Y"
+    case threeYears  = "3Y"
 
     var id: String { rawValue }
 
@@ -16,12 +18,35 @@ enum TrendRange: String, CaseIterable, Identifiable {
         case .threeMonths: return 90
         case .sixMonths:   return 180
         case .year:        return 365
+        case .twoYears:    return 730
+        case .threeYears:  return 1095
+        }
+    }
+
+    var offset: DateComponents {
+        switch self {
+        case .week:
+            return DateComponents(day: -7)
+        case .oneMonth:
+            return DateComponents(month: -1)
+        case .threeMonths:
+            return DateComponents(month: -3)
+        case .sixMonths:
+            return DateComponents(month: -6)
+        case .year:
+            return DateComponents(year: -1)
+        case .twoYears:
+            return DateComponents(year: -2)
+        case .threeYears:
+            return DateComponents(year: -3)
         }
     }
 }
 
 enum TrendZoom: String, CaseIterable, Identifiable {
     case all = "All"
+    case year = "1Y"
+    case sixMonths = "6M"
     case month = "30D"
     case twoWeeks = "14D"
     case week = "7D"
@@ -31,6 +56,8 @@ enum TrendZoom: String, CaseIterable, Identifiable {
     var days: Int? {
         switch self {
         case .all: return nil
+        case .year: return 365
+        case .sixMonths: return 180
         case .month: return 30
         case .twoWeeks: return 14
         case .week: return 7
@@ -44,7 +71,7 @@ enum TrendWindow {
         endingAt end: Date,
         calendar: Calendar = .current
     ) -> Date {
-        calendar.date(byAdding: .day, value: -range.days, to: end) ?? end
+        calendar.date(byAdding: range.offset, to: end) ?? end
     }
 
     static func sessions(
@@ -90,6 +117,9 @@ enum TrendWindow {
 
 struct TrendsView: View {
     @Environment(SleepStore.self) var store
+    @Environment(SleepIntentStore.self) var intentStore
+    @Environment(PeakAlphaStore.self) var peakAlphaStore
+    @Environment(MealStore.self) var mealStore
     @State private var range: TrendRange = .week
     @State private var zoom: TrendZoom = .all
     @State private var rangeEnd = Date()
@@ -134,11 +164,17 @@ struct TrendsView: View {
 
                         TrendSummaryView(summary: summary)
                             .padding(.horizontal)
+                        RecoveryScoreTrendView(scores: recoveryScores)
+                            .padding(.horizontal)
                         SleepDurationChartView(sessions: visibleSessions)
                             .padding(.horizontal)
                         SleepDebtChartView(sessions: visibleSessions)
                             .padding(.horizontal)
                         ContinuityChartView(sessions: visibleSessions)
+                            .padding(.horizontal)
+                        SleepLatencyTrendView(records: latencyRecords, summary: latencySummary)
+                            .padding(.horizontal)
+                        MorningWakeTrendView(sessions: visibleSessions)
                             .padding(.horizontal)
                         MovementWakeChartView(sessions: visibleSessions)
                             .padding(.horizontal)
@@ -158,7 +194,15 @@ struct TrendsView: View {
             }
             .refreshable {
                 rangeEnd = Date()
+                mealStore.reload()
+                try? await intentStore.loadAsync()
+                try? await peakAlphaStore.loadAsync()
                 await store.load()
+                publishLatencySnapshots()
+            }
+            .task {
+                rangeEnd = Date()
+                try? await peakAlphaStore.loadAsync()
             }
             .navigationTitle("Trends")
             .toolbar {
@@ -176,13 +220,32 @@ struct TrendsView: View {
         range.days <= 30 ? .all : zoom
     }
 
+    private var latencyRecords: [SleepLatencyRecord] {
+        SleepLatencyAnalyzer.records(
+            sessions: visibleSessions,
+            events: intentStore.events
+        )
+    }
+
+    private var latencySummary: SleepLatencySummary {
+        SleepLatencyAnalyzer.summary(records: latencyRecords, now: rangeEnd)
+    }
+
+    private var recoveryScores: [RecoveryScore] {
+        RecoveryScoreCalculator.scores(
+            sessions: visibleSessions,
+            dailyHRV: filteredHRV,
+            dailyRestingHR: filteredRestingHR
+        )
+    }
+
     @ViewBuilder
     private var correlationsSection: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("Correlations")
                 .font(.title3.weight(.semibold))
                 .padding(.horizontal)
-            Text("How activity and heart health relate to sleep")
+            Text("How activity, heart metrics, mindfulness, and Peak Alpha relate to sleep")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal)
@@ -220,6 +283,45 @@ struct TrendsView: View {
             dailyCalories: filteredCalories
         )
         .padding(.horizontal)
+
+        ActivityToSleepStagesView(
+            sessions: visibleSessions,
+            dailyCalories: filteredCalories
+        )
+        .padding(.horizontal)
+
+        SleepStagesToNextDayHRVView(
+            sessions: visibleSessions,
+            dailyHRV: filteredHRV
+        )
+        .padding(.horizontal)
+
+        SleepStagesToNextDayRestingHRView(
+            sessions: visibleSessions,
+            dailyRestingHR: filteredRestingHR
+        )
+        .padding(.horizontal)
+
+        MeditationToSleepView(
+            sessions: visibleSessions,
+            dailyMindfulMinutes: filteredMindfulMinutes,
+            recoveryScores: recoveryScores
+        )
+        .padding(.horizontal)
+
+        PeakAlphaCorrelationView(
+            entries: filteredPeakAlphaEntries,
+            sessions: visibleSessions,
+            dailyMindfulMinutes: filteredMindfulMinutes,
+            recoveryScores: recoveryScores
+        )
+        .padding(.horizontal)
+
+        MealTimingSleepView(
+            sessions: visibleSessions,
+            meals: mealStore.events
+        )
+        .padding(.horizontal)
     }
 
     private var filteredCalories: [DailyMetricSample] {
@@ -234,6 +336,17 @@ struct TrendsView: View {
         TrendWindow.metrics(store.dailyHRV, range: range, zoom: effectiveZoom, endingAt: rangeEnd)
     }
 
+    private var filteredMindfulMinutes: [DailyMetricSample] {
+        TrendWindow.metrics(store.dailyMindfulMinutes, range: range, zoom: effectiveZoom, endingAt: rangeEnd)
+    }
+
+    private var filteredPeakAlphaEntries: [PeakAlphaEntry] {
+        let calendar = Calendar.current
+        let start = calendar.startOfDay(for: TrendWindow.rangeStart(for: range, endingAt: rangeEnd))
+        let end = calendar.startOfDay(for: rangeEnd)
+        return peakAlphaStore.entries.filter { $0.day >= start && $0.day <= end }
+    }
+
     private var trendsExportURL: URL? {
         guard !visibleSessions.isEmpty else { return nil }
         return try? CSVExporter.trendsFile(
@@ -241,7 +354,16 @@ struct TrendsView: View {
             dailyCalories: filteredCalories,
             dailyRestingHR: filteredRestingHR,
             dailyHRV: filteredHRV,
-            sleepHeartRates: store.sleepHeartRates
+            sleepHeartRates: store.sleepHeartRates,
+            meals: mealStore.events
         ).writeTemporaryFile()
+    }
+
+    private func publishLatencySnapshots() {
+        let records = SleepLatencyAnalyzer.records(
+            sessions: store.sessions,
+            events: intentStore.events
+        )
+        try? intentStore.saveLatencySnapshots(from: records)
     }
 }

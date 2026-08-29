@@ -3,6 +3,10 @@ import HealthKit
 
 final class HealthKitManager: @unchecked Sendable {
     private let store = HKHealthStore()
+    private let observerLock = NSLock()
+    /// Guarded by `observerLock`, and reached from HealthKit's own callback
+    /// queue rather than the main actor.
+    nonisolated(unsafe) private var sleepObserverQuery: HKObserverQuery?
 
     struct TimedQuantitySample {
         let startDate: Date
@@ -23,8 +27,67 @@ final class HealthKitManager: @unchecked Sendable {
             HKObjectType.quantityType(forIdentifier: .heartRateVariabilitySDNN)!,
             HKObjectType.quantityType(forIdentifier: .heartRate)!,
             HKObjectType.categoryType(forIdentifier: .appleStandHour)!,
+            HKObjectType.categoryType(forIdentifier: .mindfulSession)!,
         ]
         try await store.requestAuthorization(toShare: [], read: types)
+    }
+
+    /// Watches for sleep samples landing in HealthKit and calls `onChange`.
+    ///
+    /// The watch does not write a night's stage samples until the sleep session
+    /// closes, and those samples then need to sync to the phone — often long
+    /// after the app was last opened. Without an observer the app only ever sees
+    /// whatever happened to be in the store at launch.
+    ///
+    /// Registration is idempotent; calling it again is a no-op.
+    func startObservingSleepChanges(onChange: @escaping @Sendable () async -> Void) async {
+        let sleepType = HKObjectType.categoryType(forIdentifier: .sleepAnalysis)!
+        guard let query = makeObserverQueryIfNeeded(for: sleepType, onChange: onChange) else { return }
+
+        store.execute(query)
+        await enableBackgroundDelivery(for: sleepType)
+    }
+
+    /// Synchronous and `nonisolated` on purpose: `NSLock` may not be held across
+    /// a suspension point, so the registration check lives here rather than in
+    /// the `async` caller.
+    ///
+    /// Returns `nil` when an observer is already registered.
+    nonisolated private func makeObserverQueryIfNeeded(
+        for sleepType: HKSampleType,
+        onChange: @escaping @Sendable () async -> Void
+    ) -> HKObserverQuery? {
+        observerLock.lock()
+        defer { observerLock.unlock() }
+
+        guard sleepObserverQuery == nil else { return nil }
+
+        let query = HKObserverQuery(sampleType: sleepType, predicate: nil) { _, completionHandler, error in
+            guard error == nil else {
+                // Still acknowledge, otherwise HealthKit keeps re-delivering
+                // this update with backoff.
+                completionHandler()
+                return
+            }
+            Task { @MainActor in
+                await onChange()
+                // Only acknowledge once the reload is done — on a background
+                // wake this is what keeps the app alive long enough to finish.
+                completionHandler()
+            }
+        }
+        sleepObserverQuery = query
+        return query
+    }
+
+    /// `.hourly` is the finest frequency HealthKit honors for sleep; asking for
+    /// `.immediate` silently degrades to the same thing.
+    private func enableBackgroundDelivery(for type: HKObjectType) async {
+        await withCheckedContinuation { continuation in
+            store.enableBackgroundDelivery(for: type, frequency: .hourly) { _, _ in
+                continuation.resume()
+            }
+        }
     }
 
     func fetchAllSleepSamples() async throws -> [SleepSession] {
@@ -273,7 +336,41 @@ final class HealthKitManager: @unchecked Sendable {
             let day = calendar.startOfDay(for: sample.startDate)
             byDay[day, default: 0] += sample.quantity.doubleValue(for: .kilocalorie())
         }
-        return byDay
+        let dailyCalories = byDay
+            .map { DailyMetricSample(date: $0.key, value: $0.value) }
+            .sorted { $0.date < $1.date }
+        return MetricDataQuality.plausibleDailyActiveCalories(dailyCalories)
+    }
+
+    /// Sums Mindful Minutes (`HKCategoryTypeIdentifier.mindfulSession`) sessions
+    /// by calendar day. Most meditation apps, including Muse, write session
+    /// start/end times here even when richer metrics (like Peak Alpha) stay in
+    /// their own store.
+    func fetchDailyMindfulMinutes(start: Date, end: Date) async throws -> [DailyMetricSample] {
+        let mindfulType = HKObjectType.categoryType(forIdentifier: .mindfulSession)!
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: end)
+        let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
+
+        let raw: [HKSample] = try await withCheckedThrowingContinuation { continuation in
+            let query = HKSampleQuery(
+                sampleType: mindfulType,
+                predicate: predicate,
+                limit: HKObjectQueryNoLimit,
+                sortDescriptors: [sort]
+            ) { _, result, error in
+                if let error { continuation.resume(throwing: error) }
+                else { continuation.resume(returning: result ?? []) }
+            }
+            store.execute(query)
+        }
+
+        let calendar = Calendar.current
+        var minutesByDay: [Date: Double] = [:]
+        for sample in raw.compactMap({ $0 as? HKCategorySample }) {
+            let day = calendar.startOfDay(for: sample.startDate)
+            minutesByDay[day, default: 0] += sample.endDate.timeIntervalSince(sample.startDate) / 60
+        }
+        return minutesByDay
             .map { DailyMetricSample(date: $0.key, value: $0.value) }
             .sorted { $0.date < $1.date }
     }

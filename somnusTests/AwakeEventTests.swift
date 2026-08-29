@@ -198,6 +198,69 @@ struct AwakeEventTests {
         #expect(event.standHourCount == 1)
     }
 
+    @Test func nearbyOutOfBedFragmentsCountAsOneVisit() throws {
+        let start = date("2026-05-01 22:00")
+        let session = SleepSession(
+            nightDate: calendar.startOfDay(for: start.addingTimeInterval(9 * 3600)),
+            stages: [
+                SleepStage(startDate: start, endDate: start.addingTimeInterval(2 * 3600), type: .core),
+                SleepStage(startDate: start.addingTimeInterval(2 * 3600), endDate: start.addingTimeInterval(2 * 3600 + 5 * 60), type: .awake),
+                SleepStage(startDate: start.addingTimeInterval(2 * 3600 + 5 * 60), endDate: start.addingTimeInterval(2 * 3600 + 8 * 60), type: .core),
+                SleepStage(startDate: start.addingTimeInterval(2 * 3600 + 8 * 60), endDate: start.addingTimeInterval(2 * 3600 + 14 * 60), type: .awake),
+                SleepStage(startDate: start.addingTimeInterval(2 * 3600 + 14 * 60), endDate: start.addingTimeInterval(7 * 3600), type: .deep),
+            ],
+            movementSamples: [
+                MovementSample(
+                    startDate: start.addingTimeInterval(2 * 3600 + 60),
+                    endDate: start.addingTimeInterval(2 * 3600 + 2 * 60),
+                    stepCount: 10
+                ),
+                MovementSample(
+                    startDate: start.addingTimeInterval(2 * 3600 + 9 * 60),
+                    endDate: start.addingTimeInterval(2 * 3600 + 10 * 60),
+                    stepCount: 12
+                )
+            ]
+        )
+
+        let event = try #require(session.awakeEvents.first)
+
+        #expect(session.awakeEvents.count == 1)
+        #expect(event.classification == .likelyOutOfBed)
+        #expect(event.stepCount == 22)
+        #expect(event.duration == 14 * 60)
+        #expect(session.movementConfirmedAwakeningCount == 1)
+    }
+
+    @Test func separatedOutOfBedVisitsRemainDistinct() {
+        let start = date("2026-05-01 22:00")
+        let session = SleepSession(
+            nightDate: calendar.startOfDay(for: start.addingTimeInterval(9 * 3600)),
+            stages: [
+                SleepStage(startDate: start, endDate: start.addingTimeInterval(2 * 3600), type: .core),
+                SleepStage(startDate: start.addingTimeInterval(2 * 3600), endDate: start.addingTimeInterval(2 * 3600 + 5 * 60), type: .awake),
+                SleepStage(startDate: start.addingTimeInterval(2 * 3600 + 5 * 60), endDate: start.addingTimeInterval(4 * 3600), type: .core),
+                SleepStage(startDate: start.addingTimeInterval(4 * 3600), endDate: start.addingTimeInterval(4 * 3600 + 5 * 60), type: .awake),
+                SleepStage(startDate: start.addingTimeInterval(4 * 3600 + 5 * 60), endDate: start.addingTimeInterval(7 * 3600), type: .deep),
+            ],
+            movementSamples: [
+                MovementSample(
+                    startDate: start.addingTimeInterval(2 * 3600 + 60),
+                    endDate: start.addingTimeInterval(2 * 3600 + 2 * 60),
+                    stepCount: 10
+                ),
+                MovementSample(
+                    startDate: start.addingTimeInterval(4 * 3600 + 60),
+                    endDate: start.addingTimeInterval(4 * 3600 + 2 * 60),
+                    stepCount: 12
+                )
+            ]
+        )
+
+        #expect(session.awakeEvents.count == 2)
+        #expect(session.movementConfirmedAwakeningCount == 2)
+    }
+
     @Test func trendSummaryTracksMovementConfirmedWakeups() {
         let start = date("2026-05-01 22:00")
         let sessions = (0..<3).map { offset in

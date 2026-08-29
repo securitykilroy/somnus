@@ -5,6 +5,19 @@ struct RestingHRSleepView: View {
     let sessions: [SleepSession]
     let dailyRestingHR: [DailyMetricSample]
 
+    private var sleepDurationRestingHRPoints: [(x: Double, y: Double)] {
+        let restingHRByDay = Dictionary(
+            dailyRestingHR.map { (Calendar.current.startOfDay(for: $0.date), $0.value) },
+            uniquingKeysWith: { $1 }
+        )
+
+        return sessions.compactMap { session in
+            let day = Calendar.current.startOfDay(for: session.nightDate)
+            guard let restingHR = restingHRByDay[day] else { return nil }
+            return (x: session.totalSleep.asHours, y: restingHR)
+        }
+    }
+
     private var meanRHR: Double {
         guard !dailyRestingHR.isEmpty else { return 0 }
         return dailyRestingHR.reduce(0) { $0 + $1.value } / Double(dailyRestingHR.count)
@@ -87,6 +100,20 @@ struct RestingHRSleepView: View {
                 .chartYAxisLabel("hours")
                 .chartXAxis { xAxisMarks }
                 .frame(height: 130)
+
+                MetricScatterChartView(
+                    title: "Sleep Duration vs Resting HR",
+                    points: sleepDurationRestingHRPoints,
+                    color: .red,
+                    xAxisLabel: "Sleep (h)",
+                    yAxisLabel: "Resting HR (bpm)",
+                    interpretation: { slope in
+                        slope <= 0
+                            ? "more sleep → lower resting HR"
+                            : "more sleep → higher resting HR"
+                    }
+                )
+                .padding(.top, 8)
             }
         }
         .padding()

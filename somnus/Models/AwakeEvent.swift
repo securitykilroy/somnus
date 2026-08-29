@@ -69,6 +69,8 @@ struct AwakeEvent: Identifiable {
 }
 
 enum AwakeEventDetector {
+    private static let outOfBedMergeGap: TimeInterval = 20 * 60
+
     static func events(for session: SleepSession) -> [AwakeEvent] {
         let awakeSegments = movementEligibleAwakeSegments(for: session)
         let evidenceWindows = movementEvidenceWindows(for: awakeSegments)
@@ -100,8 +102,10 @@ enum AwakeEventDetector {
             )
         }
 
-        return (awakeEvents + inferredMovementEvents(for: session, excluding: evidenceWindows))
+        let events = (awakeEvents + inferredMovementEvents(for: session, excluding: evidenceWindows))
             .sorted { $0.startDate < $1.startDate }
+
+        return coalescedOutOfBedEvents(events)
     }
 
     static func movementEvidenceWindows(for session: SleepSession) -> [DateInterval] {
@@ -223,6 +227,56 @@ enum AwakeEventDetector {
         }
 
         return clusters
+    }
+
+    private static func coalescedOutOfBedEvents(_ events: [AwakeEvent]) -> [AwakeEvent] {
+        var result: [AwakeEvent] = []
+
+        for event in events {
+            guard event.classification == .likelyOutOfBed,
+                  let last = result.last,
+                  last.classification == .likelyOutOfBed,
+                  event.startDate.timeIntervalSince(last.endDate) <= outOfBedMergeGap else {
+                result.append(event)
+                continue
+            }
+
+            result[result.count - 1] = mergedOutOfBedEvent(last, event)
+        }
+
+        return result
+    }
+
+    private static func mergedOutOfBedEvent(_ first: AwakeEvent, _ second: AwakeEvent) -> AwakeEvent {
+        let startDate = min(first.startDate, second.startDate)
+        let endDate = max(first.endDate, second.endDate)
+        let stepCount = max(first.stepCount, second.stepCount)
+        let distance = max(first.distance, second.distance)
+        let standHourCount = max(first.standHourCount, second.standHourCount)
+        let classification = classify(
+            stepCount: stepCount,
+            distance: distance,
+            standHourCount: standHourCount
+        )
+
+        return AwakeEvent(
+            startDate: startDate,
+            endDate: endDate,
+            duration: endDate.timeIntervalSince(startDate),
+            stepCount: stepCount,
+            distance: distance,
+            standHourCount: standHourCount,
+            classification: classification,
+            confidence: max(
+                first.confidence,
+                confidence(
+                    for: classification,
+                    stepCount: stepCount,
+                    distance: distance,
+                    standHourCount: standHourCount
+                )
+            )
+        )
     }
 
     private static func inferredEvent(

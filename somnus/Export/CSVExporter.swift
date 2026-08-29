@@ -21,6 +21,7 @@ enum CSVExporter {
         dailyRestingHR: [DailyMetricSample],
         dailyHRV: [DailyMetricSample],
         sleepHeartRates: [Date: Double],
+        meals: [MealEvent] = [],
         calendar: Calendar = .current
     ) -> CSVExportFile {
         let sortedSessions = sessions.sorted { $0.nightDate < $1.nightDate }
@@ -50,12 +51,25 @@ enum CSVExporter {
             "resting_hr",
             "hrv",
             "sleep_hr",
+            "meal_count",
+            "first_meal_time",
+            "last_meal_time",
+            "hours_last_meal_to_sleep",
+            "meals",
         ]
         let rows = sortedSessions.map { session in
             let activityDay = calendar.date(byAdding: .day, value: -1, to: session.nightDate)
                 .map { calendar.startOfDay(for: $0) }
             let nightDate = calendar.startOfDay(for: session.nightDate)
-            return [
+            let nightMeals = MealSleepAnalyzer.meals(
+                precedingSleepIn: session,
+                from: meals,
+                calendar: calendar
+            )
+            // Split from the sleep columns below: as one literal the row grew
+            // past what the type checker will infer in reasonable time.
+            let mealColumns = mealColumns(for: nightMeals, session: session)
+            let sleepColumns: [String] = [
                 dateOnly(session.nightDate, calendar: calendar),
                 timestamp(session.startTime),
                 timestamp(session.endTime),
@@ -74,13 +88,18 @@ enum CSVExporter {
                 hrvByDay[nightDate].map { number($0) } ?? "",
                 sleepHRByDay[nightDate].map { number($0) } ?? "",
             ]
+            return sleepColumns + mealColumns
         }
 
         let filename = trendsFilename(for: sortedSessions, calendar: calendar)
         return CSVExportFile(filename: filename, content: csv(rows: [header] + rows))
     }
 
-    static func dailyFile(for session: SleepSession, calendar: Calendar = .current) -> CSVExportFile {
+    static func dailyFile(
+        for session: SleepSession,
+        meals: [MealEvent] = [],
+        calendar: Calendar = .current
+    ) -> CSVExportFile {
         let header = [
             "record_type",
             "night_date",
@@ -97,6 +116,7 @@ enum CSVExporter {
             "distance_meters",
             "stand_hours",
             "source",
+            "note",
         ]
         let nightDate = dateOnly(session.nightDate, calendar: calendar)
         var rows: [[String]] = [header]
@@ -120,6 +140,7 @@ enum CSVExporter {
                 "",
                 "",
                 segment.sourceNames.joined(separator: ";"),
+                "",
             ]
         })
 
@@ -139,6 +160,7 @@ enum CSVExporter {
                 number(event.stepCount),
                 number(event.distance),
                 number(event.standHourCount),
+                "",
                 "",
             ]
         })
@@ -160,6 +182,34 @@ enum CSVExporter {
                 number(sample.distance),
                 number(sample.standHourCount),
                 sample.sourceName ?? "",
+                "",
+            ]
+        })
+
+        // Placed last so the meal rows read as a block: everything eaten from
+        // the previous morning up to sleep onset, in order.
+        rows.append(contentsOf: MealSleepAnalyzer.meals(
+            precedingSleepIn: session,
+            from: meals,
+            calendar: calendar
+        ).map { meal in
+            [
+                "meal",
+                nightDate,
+                timestamp(meal.timestamp),
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                meal.note,
             ]
         })
 
@@ -208,6 +258,7 @@ enum CSVExporter {
             "",
             "",
             "",
+            "",
         ]
     }
 
@@ -217,6 +268,40 @@ enum CSVExporter {
             return "somnus-trends.csv"
         }
         return "somnus-trends-\(dateOnly(first, calendar: calendar))-to-\(dateOnly(last, calendar: calendar)).csv"
+    }
+
+    private static func mealColumns(for meals: [MealEvent], session: SleepSession) -> [String] {
+        let onset = session.normalizedTimeline.firstSleepStart ?? session.startTime
+        let last = meals.last
+        return [
+            "\(meals.count)",
+            meals.first.map { timestamp($0.timestamp) } ?? "",
+            last.map { timestamp($0.timestamp) } ?? "",
+            last.map { number(onset.timeIntervalSince($0.timestamp) / 3600) } ?? "",
+            mealList(meals),
+        ]
+    }
+
+    /// Renders a night's meals into one cell as
+    /// `<iso timestamp>|<what was eaten>` entries joined by `; `.
+    ///
+    /// Kept in the wide per-night file on purpose: the point of this export is
+    /// to hand a tool one table where each row already pairs what was eaten
+    /// with how that night went, rather than two files that have to be joined.
+    /// `;`, `|` and newlines are neutralised so the sub-format stays parseable
+    /// and stays on one visual line. Commas and quotes are left alone — the
+    /// surrounding CSV quoting in `escape` handles those, and mangling them
+    /// would corrupt the note for no gain.
+    private static func mealList(_ meals: [MealEvent]) -> String {
+        meals
+            .map { meal in
+                let note = meal.note
+                    .replacingOccurrences(of: ";", with: ",")
+                    .replacingOccurrences(of: "|", with: "/")
+                    .replacingOccurrences(of: "\n", with: " ")
+                return "\(timestamp(meal.timestamp))|\(note)"
+            }
+            .joined(separator: "; ")
     }
 
     private static func metricDictionary(

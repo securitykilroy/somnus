@@ -6,7 +6,24 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		7F7A701F3020F9B20004FC16 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7FF3A3332FC91CEE0063353F /* WidgetKit.framework */; };
+		7F7A70203020F9B20004FC16 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7FF3A3352FC91CEE0063353F /* SwiftUI.framework */; };
+		7F7A702D3020F9B20004FC16 /* somnusWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 7F7A701E3020F9B10004FC16 /* somnusWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		7FF3A3212FC91BB60063353F /* Somnus Watch App Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 7FF3A3012FC91BB50063353F /* Somnus Watch App Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		7FF3A3342FC91CEE0063353F /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7FF3A3332FC91CEE0063353F /* WidgetKit.framework */; };
+		7FF3A3362FC91CEE0063353F /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7FF3A3352FC91CEE0063353F /* SwiftUI.framework */; };
+		7FF3A3452FC91CEF0063353F /* Somnus Watch AppExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 7FF3A3312FC91CEE0063353F /* Somnus Watch AppExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
+		7F7A702B3020F9B20004FC16 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 7FE6FC622FC67EA000C817C6 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 7F7A701D3020F9B10004FC16;
+			remoteInfo = somnusWidgetExtension;
+		};
 		7FE6FC782FC67EA100C817C6 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 7FE6FC622FC67EA000C817C6 /* Project object */;
@@ -21,17 +38,136 @@
 			remoteGlobalIDString = 7FE6FC692FC67EA000C817C6;
 			remoteInfo = somnus;
 		};
+		7FF3A30E2FC91BB60063353F /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 7FE6FC622FC67EA000C817C6 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 7FF3A3002FC91BB50063353F;
+			remoteInfo = "Somnus Watch App Watch App";
+		};
+		7FF3A3182FC91BB60063353F /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 7FE6FC622FC67EA000C817C6 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 7FF3A3002FC91BB50063353F;
+			remoteInfo = "Somnus Watch App Watch App";
+		};
+		7FF3A31F2FC91BB60063353F /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 7FE6FC622FC67EA000C817C6 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 7FF3A3002FC91BB50063353F;
+			remoteInfo = "Somnus Watch App Watch App";
+		};
+		7FF3A3432FC91CEF0063353F /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 7FE6FC622FC67EA000C817C6 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 7FF3A3302FC91CEE0063353F;
+			remoteInfo = "Somnus Watch AppExtension";
+		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		7F7A70323020F9B20004FC16 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				7F7A702D3020F9B20004FC16 /* somnusWidgetExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7FF3A3222FC91BB60063353F /* Embed Watch Content */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
+			dstSubfolderSpec = 16;
+			files = (
+				7FF3A3212FC91BB60063353F /* Somnus Watch App Watch App.app in Embed Watch Content */,
+			);
+			name = "Embed Watch Content";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7FF3A34A2FC91CEF0063353F /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				7FF3A3452FC91CEF0063353F /* Somnus Watch AppExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		7F7A701E3020F9B10004FC16 /* somnusWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = somnusWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		7FE6FC6A2FC67EA000C817C6 /* somnus.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = somnus.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		7FE6FC772FC67EA100C817C6 /* somnusTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = somnusTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		7FE6FC812FC67EA100C817C6 /* somnusUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = somnusUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		7FF3A3012FC91BB50063353F /* Somnus Watch App Watch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Somnus Watch App Watch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		7FF3A30D2FC91BB60063353F /* Somnus Watch App Watch AppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Somnus Watch App Watch AppTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		7FF3A3172FC91BB60063353F /* Somnus Watch App Watch AppUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Somnus Watch App Watch AppUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		7FF3A3312FC91CEE0063353F /* Somnus Watch AppExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "Somnus Watch AppExtension.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
+		7FF3A3332FC91CEE0063353F /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		7FF3A3352FC91CEE0063353F /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		7FF3A34B2FC91CF80063353F /* Somnus Watch AppExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Somnus Watch AppExtension.entitlements"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		7F7A70313020F9B20004FC16 /* Exceptions for "somnusWidget" folder in "somnusWidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 7F7A701D3020F9B10004FC16 /* somnusWidgetExtension */;
+		};
+		7FAE10012FC9C00100C817C6 /* Exceptions for "somnus" folder in "somnus" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 7FE6FC692FC67EA000C817C6 /* somnus */;
+		};
+		7FAE10022FC9C00100C817C6 /* Exceptions for "Somnus Watch App Watch App" folder in "Somnus Watch App Watch App" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 7FF3A3002FC91BB50063353F /* Somnus Watch App Watch App */;
+		};
+		7FF3A3462FC91CEF0063353F /* Exceptions for "Somnus Watch App" folder in "Somnus Watch AppExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 7FF3A3302FC91CEE0063353F /* Somnus Watch AppExtension */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		7F7A70213020F9B20004FC16 /* somnusWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				7F7A70313020F9B20004FC16 /* Exceptions for "somnusWidget" folder in "somnusWidgetExtension" target */,
+			);
+			path = somnusWidget;
+			sourceTree = "<group>";
+		};
+		7FAA0001310000010000AA01 /* SomnusShared */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = SomnusShared;
+			sourceTree = "<group>";
+		};
 		7FE6FC6C2FC67EA000C817C6 /* somnus */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				7FAE10012FC9C00100C817C6 /* Exceptions for "somnus" folder in "somnus" target */,
+			);
 			path = somnus;
 			sourceTree = "<group>";
 		};
@@ -45,9 +181,44 @@
 			path = somnusUITests;
 			sourceTree = "<group>";
 		};
+		7FF3A3022FC91BB50063353F /* Somnus Watch App Watch App */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				7FAE10022FC9C00100C817C6 /* Exceptions for "Somnus Watch App Watch App" folder in "Somnus Watch App Watch App" target */,
+			);
+			path = "Somnus Watch App Watch App";
+			sourceTree = "<group>";
+		};
+		7FF3A3102FC91BB60063353F /* Somnus Watch App Watch AppTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "Somnus Watch App Watch AppTests";
+			sourceTree = "<group>";
+		};
+		7FF3A31A2FC91BB60063353F /* Somnus Watch App Watch AppUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "Somnus Watch App Watch AppUITests";
+			sourceTree = "<group>";
+		};
+		7FF3A3372FC91CEE0063353F /* Somnus Watch App */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				7FF3A3462FC91CEF0063353F /* Exceptions for "Somnus Watch App" folder in "Somnus Watch AppExtension" target */,
+			);
+			path = "Somnus Watch App";
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		7F7A701B3020F9B10004FC16 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7F7A70203020F9B20004FC16 /* SwiftUI.framework in Frameworks */,
+				7F7A701F3020F9B20004FC16 /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		7FE6FC672FC67EA000C817C6 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -69,15 +240,53 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		7FF3A2FE2FC91BB50063353F /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7FF3A30A2FC91BB60063353F /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7FF3A3142FC91BB60063353F /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7FF3A32E2FC91CEE0063353F /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7FF3A3362FC91CEE0063353F /* SwiftUI.framework in Frameworks */,
+				7FF3A3342FC91CEE0063353F /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		7FE6FC612FC67EA000C817C6 = {
 			isa = PBXGroup;
 			children = (
+				7FF3A34B2FC91CF80063353F /* Somnus Watch AppExtension.entitlements */,
 				7FE6FC6C2FC67EA000C817C6 /* somnus */,
 				7FE6FC7A2FC67EA100C817C6 /* somnusTests */,
 				7FE6FC842FC67EA100C817C6 /* somnusUITests */,
+				7FF3A3022FC91BB50063353F /* Somnus Watch App Watch App */,
+				7FF3A3102FC91BB60063353F /* Somnus Watch App Watch AppTests */,
+				7FF3A31A2FC91BB60063353F /* Somnus Watch App Watch AppUITests */,
+				7FF3A3372FC91CEE0063353F /* Somnus Watch App */,
+				7F7A70213020F9B20004FC16 /* somnusWidget */,
+				7FAA0001310000010000AA01 /* SomnusShared */,
+				7FF3A3322FC91CEE0063353F /* Frameworks */,
 				7FE6FC6B2FC67EA000C817C6 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -88,13 +297,50 @@
 				7FE6FC6A2FC67EA000C817C6 /* somnus.app */,
 				7FE6FC772FC67EA100C817C6 /* somnusTests.xctest */,
 				7FE6FC812FC67EA100C817C6 /* somnusUITests.xctest */,
+				7FF3A3012FC91BB50063353F /* Somnus Watch App Watch App.app */,
+				7FF3A30D2FC91BB60063353F /* Somnus Watch App Watch AppTests.xctest */,
+				7FF3A3172FC91BB60063353F /* Somnus Watch App Watch AppUITests.xctest */,
+				7FF3A3312FC91CEE0063353F /* Somnus Watch AppExtension.appex */,
+				7F7A701E3020F9B10004FC16 /* somnusWidgetExtension.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		7FF3A3322FC91CEE0063353F /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				7FF3A3332FC91CEE0063353F /* WidgetKit.framework */,
+				7FF3A3352FC91CEE0063353F /* SwiftUI.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		7F7A701D3020F9B10004FC16 /* somnusWidgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 7F7A702E3020F9B20004FC16 /* Build configuration list for PBXNativeTarget "somnusWidgetExtension" */;
+			buildPhases = (
+				7F7A701A3020F9B10004FC16 /* Sources */,
+				7F7A701B3020F9B10004FC16 /* Frameworks */,
+				7F7A701C3020F9B10004FC16 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				7F7A70213020F9B20004FC16 /* somnusWidget */,
+				7FAA0001310000010000AA01 /* SomnusShared */,
+			);
+			name = somnusWidgetExtension;
+			packageProductDependencies = (
+			);
+			productName = somnusWidgetExtension;
+			productReference = 7F7A701E3020F9B10004FC16 /* somnusWidgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		7FE6FC692FC67EA000C817C6 /* somnus */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 7FE6FC8B2FC67EA100C817C6 /* Build configuration list for PBXNativeTarget "somnus" */;
@@ -102,12 +348,17 @@
 				7FE6FC662FC67EA000C817C6 /* Sources */,
 				7FE6FC672FC67EA000C817C6 /* Frameworks */,
 				7FE6FC682FC67EA000C817C6 /* Resources */,
+				7FF3A3222FC91BB60063353F /* Embed Watch Content */,
+				7F7A70323020F9B20004FC16 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				7FF3A3202FC91BB60063353F /* PBXTargetDependency */,
+				7F7A702C3020F9B20004FC16 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
+				7FAA0001310000010000AA01 /* SomnusShared */,
 				7FE6FC6C2FC67EA000C817C6 /* somnus */,
 			);
 			name = somnus;
@@ -163,6 +414,98 @@
 			productReference = 7FE6FC812FC67EA100C817C6 /* somnusUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		7FF3A3002FC91BB50063353F /* Somnus Watch App Watch App */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 7FF3A3292FC91BB60063353F /* Build configuration list for PBXNativeTarget "Somnus Watch App Watch App" */;
+			buildPhases = (
+				7FF3A2FD2FC91BB50063353F /* Sources */,
+				7FF3A2FE2FC91BB50063353F /* Frameworks */,
+				7FF3A2FF2FC91BB50063353F /* Resources */,
+				7FF3A34A2FC91CEF0063353F /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				7FF3A3442FC91CEF0063353F /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				7FF3A3022FC91BB50063353F /* Somnus Watch App Watch App */,
+			);
+			name = "Somnus Watch App Watch App";
+			packageProductDependencies = (
+			);
+			productName = "Somnus Watch App Watch App";
+			productReference = 7FF3A3012FC91BB50063353F /* Somnus Watch App Watch App.app */;
+			productType = "com.apple.product-type.application";
+		};
+		7FF3A30C2FC91BB60063353F /* Somnus Watch App Watch AppTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 7FF3A32A2FC91BB60063353F /* Build configuration list for PBXNativeTarget "Somnus Watch App Watch AppTests" */;
+			buildPhases = (
+				7FF3A3092FC91BB60063353F /* Sources */,
+				7FF3A30A2FC91BB60063353F /* Frameworks */,
+				7FF3A30B2FC91BB60063353F /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				7FF3A30F2FC91BB60063353F /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				7FF3A3102FC91BB60063353F /* Somnus Watch App Watch AppTests */,
+			);
+			name = "Somnus Watch App Watch AppTests";
+			packageProductDependencies = (
+			);
+			productName = "Somnus Watch App Watch AppTests";
+			productReference = 7FF3A30D2FC91BB60063353F /* Somnus Watch App Watch AppTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		7FF3A3162FC91BB60063353F /* Somnus Watch App Watch AppUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 7FF3A32B2FC91BB60063353F /* Build configuration list for PBXNativeTarget "Somnus Watch App Watch AppUITests" */;
+			buildPhases = (
+				7FF3A3132FC91BB60063353F /* Sources */,
+				7FF3A3142FC91BB60063353F /* Frameworks */,
+				7FF3A3152FC91BB60063353F /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				7FF3A3192FC91BB60063353F /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				7FF3A31A2FC91BB60063353F /* Somnus Watch App Watch AppUITests */,
+			);
+			name = "Somnus Watch App Watch AppUITests";
+			packageProductDependencies = (
+			);
+			productName = "Somnus Watch App Watch AppUITests";
+			productReference = 7FF3A3172FC91BB60063353F /* Somnus Watch App Watch AppUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+		7FF3A3302FC91CEE0063353F /* Somnus Watch AppExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 7FF3A3472FC91CEF0063353F /* Build configuration list for PBXNativeTarget "Somnus Watch AppExtension" */;
+			buildPhases = (
+				7FF3A32D2FC91CEE0063353F /* Sources */,
+				7FF3A32E2FC91CEE0063353F /* Frameworks */,
+				7FF3A32F2FC91CEE0063353F /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				7FF3A3372FC91CEE0063353F /* Somnus Watch App */,
+			);
+			name = "Somnus Watch AppExtension";
+			packageProductDependencies = (
+			);
+			productName = "Somnus Watch AppExtension";
+			productReference = 7FF3A3312FC91CEE0063353F /* Somnus Watch AppExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -170,9 +513,12 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 2650;
+				LastSwiftUpdateCheck = 2700;
 				LastUpgradeCheck = 2650;
 				TargetAttributes = {
+					7F7A701D3020F9B10004FC16 = {
+						CreatedOnToolsVersion = 27.0;
+					};
 					7FE6FC692FC67EA000C817C6 = {
 						CreatedOnToolsVersion = 26.5;
 					};
@@ -183,6 +529,20 @@
 					7FE6FC802FC67EA100C817C6 = {
 						CreatedOnToolsVersion = 26.5;
 						TestTargetID = 7FE6FC692FC67EA000C817C6;
+					};
+					7FF3A3002FC91BB50063353F = {
+						CreatedOnToolsVersion = 26.5;
+					};
+					7FF3A30C2FC91BB60063353F = {
+						CreatedOnToolsVersion = 26.5;
+						TestTargetID = 7FF3A3002FC91BB50063353F;
+					};
+					7FF3A3162FC91BB60063353F = {
+						CreatedOnToolsVersion = 26.5;
+						TestTargetID = 7FF3A3002FC91BB50063353F;
+					};
+					7FF3A3302FC91CEE0063353F = {
+						CreatedOnToolsVersion = 26.5;
 					};
 				};
 			};
@@ -203,11 +563,23 @@
 				7FE6FC692FC67EA000C817C6 /* somnus */,
 				7FE6FC762FC67EA100C817C6 /* somnusTests */,
 				7FE6FC802FC67EA100C817C6 /* somnusUITests */,
+				7FF3A3002FC91BB50063353F /* Somnus Watch App Watch App */,
+				7FF3A30C2FC91BB60063353F /* Somnus Watch App Watch AppTests */,
+				7FF3A3162FC91BB60063353F /* Somnus Watch App Watch AppUITests */,
+				7FF3A3302FC91CEE0063353F /* Somnus Watch AppExtension */,
+				7F7A701D3020F9B10004FC16 /* somnusWidgetExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		7F7A701C3020F9B10004FC16 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		7FE6FC682FC67EA000C817C6 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -229,9 +601,44 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		7FF3A2FF2FC91BB50063353F /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7FF3A30B2FC91BB60063353F /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7FF3A3152FC91BB60063353F /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7FF3A32F2FC91CEE0063353F /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		7F7A701A3020F9B10004FC16 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		7FE6FC662FC67EA000C817C6 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -253,9 +660,42 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		7FF3A2FD2FC91BB50063353F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7FF3A3092FC91BB60063353F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7FF3A3132FC91BB60063353F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7FF3A32D2FC91CEE0063353F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		7F7A702C3020F9B20004FC16 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 7F7A701D3020F9B10004FC16 /* somnusWidgetExtension */;
+			targetProxy = 7F7A702B3020F9B20004FC16 /* PBXContainerItemProxy */;
+		};
 		7FE6FC792FC67EA100C817C6 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 7FE6FC692FC67EA000C817C6 /* somnus */;
@@ -266,9 +706,113 @@
 			target = 7FE6FC692FC67EA000C817C6 /* somnus */;
 			targetProxy = 7FE6FC822FC67EA100C817C6 /* PBXContainerItemProxy */;
 		};
+		7FF3A30F2FC91BB60063353F /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 7FF3A3002FC91BB50063353F /* Somnus Watch App Watch App */;
+			targetProxy = 7FF3A30E2FC91BB60063353F /* PBXContainerItemProxy */;
+		};
+		7FF3A3192FC91BB60063353F /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 7FF3A3002FC91BB50063353F /* Somnus Watch App Watch App */;
+			targetProxy = 7FF3A3182FC91BB60063353F /* PBXContainerItemProxy */;
+		};
+		7FF3A3202FC91BB60063353F /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 7FF3A3002FC91BB50063353F /* Somnus Watch App Watch App */;
+			targetProxy = 7FF3A31F2FC91BB60063353F /* PBXContainerItemProxy */;
+		};
+		7FF3A3442FC91CEF0063353F /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 7FF3A3302FC91CEE0063353F /* Somnus Watch AppExtension */;
+			targetProxy = 7FF3A3432FC91CEF0063353F /* PBXContainerItemProxy */;
+		};
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		7F7A702F3020F9B20004FC16 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = somnusWidget/somnusWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 20;
+				DEVELOPMENT_TEAM = 68TCQS7B4D;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = somnusWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = somnusWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.5;
+				PRODUCT_BUNDLE_IDENTIFIER = com.washere.somnus.somnusWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				XROS_DEPLOYMENT_TARGET = 26.5;
+			};
+			name = Debug;
+		};
+		7F7A70303020F9B20004FC16 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = somnusWidget/somnusWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 20;
+				DEVELOPMENT_TEAM = 68TCQS7B4D;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = somnusWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = somnusWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.5;
+				PRODUCT_BUNDLE_IDENTIFIER = com.washere.somnus.somnusWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				XROS_DEPLOYMENT_TARGET = 26.5;
+			};
+			name = Release;
+		};
 		7FE6FC892FC67EA100C817C6 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -303,6 +847,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 18;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = 68TCQS7B4D;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -324,6 +869,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 1.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -367,6 +913,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 18;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = 68TCQS7B4D;
 				ENABLE_NS_ASSERTIONS = NO;
@@ -382,6 +929,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 1.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
@@ -397,23 +945,25 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = somnus/somnus.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 20;
 				DEVELOPMENT_TEAM = 68TCQS7B4D;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = somnus/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Somnus;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Somnus reads your sleep data from Apple Health to display sleep statistics and trends.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UIBackgroundModes = "remote-notification";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 26;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.washere.somnus;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -433,23 +983,25 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = somnus/somnus.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 20;
 				DEVELOPMENT_TEAM = 68TCQS7B4D;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = somnus/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Somnus;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Somnus reads your sleep data from Apple Health to display sleep statistics and trends.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UIBackgroundModes = "remote-notification";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 26;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.washere.somnus;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -467,11 +1019,9 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 68TCQS7B4D;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
-				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.washere.somnusTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -489,11 +1039,9 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 68TCQS7B4D;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
-				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.washere.somnusTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -510,10 +1058,8 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 68TCQS7B4D;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.washere.somnusUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -530,10 +1076,8 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 68TCQS7B4D;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.washere.somnusUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -546,9 +1090,236 @@
 			};
 			name = Release;
 		};
+		7FF3A3232FC91BB60063353F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "Somnus Watch App Watch App/Somnus Watch App Watch App.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 20;
+				DEVELOPMENT_TEAM = 68TCQS7B4D;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Somnus Watch App Watch App/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Somnus Watch App";
+				INFOPLIST_KEY_UIBackgroundModes = "remote-notification";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.washere.somnus;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.washere.somnus.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Debug;
+		};
+		7FF3A3242FC91BB60063353F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "Somnus Watch App Watch App/Somnus Watch App Watch App.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 20;
+				DEVELOPMENT_TEAM = 68TCQS7B4D;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Somnus Watch App Watch App/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Somnus Watch App";
+				INFOPLIST_KEY_UIBackgroundModes = "remote-notification";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.washere.somnus;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.washere.somnus.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Release;
+		};
+		7FF3A3252FC91BB60063353F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 68TCQS7B4D;
+				GENERATE_INFOPLIST_FILE = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.washere.Somnus-Watch-App-Watch-AppTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Somnus Watch App Watch App.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Somnus Watch App Watch App";
+				WATCHOS_DEPLOYMENT_TARGET = 26.5;
+			};
+			name = Debug;
+		};
+		7FF3A3262FC91BB60063353F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 68TCQS7B4D;
+				GENERATE_INFOPLIST_FILE = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.washere.Somnus-Watch-App-Watch-AppTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Somnus Watch App Watch App.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Somnus Watch App Watch App";
+				WATCHOS_DEPLOYMENT_TARGET = 26.5;
+			};
+			name = Release;
+		};
+		7FF3A3272FC91BB60063353F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 68TCQS7B4D;
+				GENERATE_INFOPLIST_FILE = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.washere.Somnus-Watch-App-Watch-AppUITests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				TEST_TARGET_NAME = "Somnus Watch App Watch App";
+				WATCHOS_DEPLOYMENT_TARGET = 26.5;
+			};
+			name = Debug;
+		};
+		7FF3A3282FC91BB60063353F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 68TCQS7B4D;
+				GENERATE_INFOPLIST_FILE = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.washere.Somnus-Watch-App-Watch-AppUITests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				TEST_TARGET_NAME = "Somnus Watch App Watch App";
+				WATCHOS_DEPLOYMENT_TARGET = 26.5;
+			};
+			name = Release;
+		};
+		7FF3A3482FC91CEF0063353F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = "Somnus Watch AppExtension.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 20;
+				DEVELOPMENT_TEAM = 68TCQS7B4D;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Somnus Watch App/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Somnus Watch App";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.washere.somnus.watchkitapp.Somnus-Watch-App";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Debug;
+		};
+		7FF3A3492FC91CEF0063353F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = "Somnus Watch AppExtension.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 20;
+				DEVELOPMENT_TEAM = 68TCQS7B4D;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Somnus Watch App/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Somnus Watch App";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.washere.somnus.watchkitapp.Somnus-Watch-App";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		7F7A702E3020F9B20004FC16 /* Build configuration list for PBXNativeTarget "somnusWidgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7F7A702F3020F9B20004FC16 /* Debug */,
+				7F7A70303020F9B20004FC16 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		7FE6FC652FC67EA000C817C6 /* Build configuration list for PBXProject "somnus" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -581,6 +1352,42 @@
 			buildConfigurations = (
 				7FE6FC922FC67EA100C817C6 /* Debug */,
 				7FE6FC932FC67EA100C817C6 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		7FF3A3292FC91BB60063353F /* Build configuration list for PBXNativeTarget "Somnus Watch App Watch App" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7FF3A3232FC91BB60063353F /* Debug */,
+				7FF3A3242FC91BB60063353F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		7FF3A32A2FC91BB60063353F /* Build configuration list for PBXNativeTarget "Somnus Watch App Watch AppTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7FF3A3252FC91BB60063353F /* Debug */,
+				7FF3A3262FC91BB60063353F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		7FF3A32B2FC91BB60063353F /* Build configuration list for PBXNativeTarget "Somnus Watch App Watch AppUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7FF3A3272FC91BB60063353F /* Debug */,
+				7FF3A3282FC91BB60063353F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		7FF3A3472FC91CEF0063353F /* Build configuration list for PBXNativeTarget "Somnus Watch AppExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7FF3A3482FC91CEF0063353F /* Debug */,
+				7FF3A3492FC91CEF0063353F /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

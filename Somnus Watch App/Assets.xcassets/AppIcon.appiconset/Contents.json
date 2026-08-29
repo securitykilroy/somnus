@@ -1,0 +1,14 @@
+{
+  "images" : [
+    {
+      "filename" : "ChatGPT Image May 26, 2026 at 06_45_50 PM.png",
+      "idiom" : "universal",
+      "platform" : "watchos",
+      "size" : "1024x1024"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

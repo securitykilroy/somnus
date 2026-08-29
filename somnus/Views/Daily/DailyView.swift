@@ -2,6 +2,7 @@ import SwiftUI
 
 struct DailyView: View {
     @Environment(SleepStore.self) var store
+    @Environment(MealStore.self) var mealStore
     @State private var selectedIndex: Int = 0
 
     private var currentSession: SleepSession? {
@@ -31,6 +32,7 @@ struct DailyView: View {
                                 statsBar(session)
                                 QualityCardView(session: session)
                                 analysisGrid(session)
+                                MorningWakeCardView(session: session)
                                 AwakeEventListView(session: session)
                                 HypnogramView(session: session)
                                 StageDurationView(session: session)
@@ -58,7 +60,7 @@ struct DailyView: View {
 
     private var dailyExportURL: URL? {
         guard let currentSession else { return nil }
-        return try? CSVExporter.dailyFile(for: currentSession).writeTemporaryFile()
+        return try? CSVExporter.dailyFile(for: currentSession, meals: mealStore.events).writeTemporaryFile()
     }
 
     @ViewBuilder
@@ -133,6 +135,7 @@ struct DailyView: View {
             MetricCardView(title: "WASO", value: session.wakeAfterSleepOnset.hoursAndMinutes, subtitle: "awake after sleep onset")
             MetricCardView(title: "Awakenings", value: "\(session.awakeningCount)", subtitle: "within the sleep window")
             MetricCardView(title: "Out of Bed", value: "\(session.movementConfirmedAwakeningCount)", subtitle: session.likelyOutOfBedDuration.hoursAndMinutes, valueColor: session.movementConfirmedAwakeningCount > 0 ? .orange : .primary)
+            MetricCardView(title: "Morning Tail", value: session.morningWakeAnalysis().terminalWakeDuration.hoursAndMinutes, subtitle: "final wake to get-up", valueColor: session.morningWakeAnalysis().terminalWakeDuration >= 20 * 60 ? .orange : .primary)
             MetricCardView(title: "REM Latency", value: session.remLatency?.hoursAndMinutes ?? "n/a", subtitle: "from first sleep")
             MetricCardView(title: "Deep", value: session.deepRatio.percentString, subtitle: session.deepDuration.hoursAndMinutes)
             MetricCardView(title: "REM", value: session.remRatio.percentString, subtitle: session.remDuration.hoursAndMinutes)

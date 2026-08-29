@@ -140,8 +140,19 @@ struct SleepSession: Identifiable {
         return min(1, wasoRatio + (transitionRate * 0.04) + (awakeningRate * 0.08))
     }
 
+    /// The clock-time midpoint between sleep onset and final wake — the standard
+    /// "sleep midpoint" used to measure bedtime/wake-time regularity. Using the
+    /// onset/wake midpoint (rather than `startTime + totalSleep / 2`) keeps the
+    /// anchor stable across nights with long mid-sleep awakenings, since adding
+    /// half of total *sleep* duration to the start time drifts earlier as awake
+    /// gaps grow.
     var regularityAnchor: Date {
-        Date(timeIntervalSince1970: startTime.timeIntervalSince1970 + totalSleep / 2)
+        guard let firstSleep = normalizedTimeline.firstSleepStart,
+              let lastSleep = normalizedTimeline.lastSleepEnd else {
+            return Date(timeIntervalSince1970: startTime.timeIntervalSince1970 + totalSleep / 2)
+        }
+        let midpoint = (firstSleep.timeIntervalSince1970 + lastSleep.timeIntervalSince1970) / 2
+        return Date(timeIntervalSince1970: midpoint)
     }
 
     var dataQuality: SleepDataQuality {
@@ -170,6 +181,74 @@ struct SleepSession: Identifiable {
             if stages[i].type != stages[i - 1].type { count += 1 }
         }
         return count
+    }
+
+    func morningWakeAnalysis(cutoffHour: Int = 4, calendar: Calendar = .current) -> MorningWakeAnalysis {
+        let dayStart = calendar.startOfDay(for: nightDate)
+        let cutoff = calendar.date(byAdding: .hour, value: cutoffHour, to: dayStart) ?? dayStart
+        let segmentsAfterCutoff = normalizedTimeline.segments
+            .filter { $0.endDate > cutoff && $0.startDate < endTime }
+
+        let awakeOrInBedAfterCutoff = segmentsAfterCutoff
+            .filter { !$0.type.isSleep }
+            .reduce(0) { total, segment in
+                total + clippedDuration(segment, from: cutoff, to: endTime)
+            }
+
+        let sleepAfterCutoff = segmentsAfterCutoff
+            .filter { $0.type.isSleep }
+            .reduce(0) { total, segment in
+                total + clippedDuration(segment, from: cutoff, to: endTime)
+            }
+
+        let firstWakeAfterCutoff = segmentsAfterCutoff
+            .filter { !$0.type.isSleep }
+            .map { max($0.startDate, cutoff) }
+            .min()
+
+        let terminalWakeStart: Date?
+        if let lastSleepEnd = normalizedTimeline.lastSleepEnd, lastSleepEnd < endTime {
+            terminalWakeStart = max(lastSleepEnd, cutoff)
+        } else {
+            terminalWakeStart = nil
+        }
+
+        let terminalWakeDuration = terminalWakeStart.map { max(0, endTime.timeIntervalSince($0)) } ?? 0
+        let outOfBedEvents = awakeEvents.filter { $0.endDate > cutoff }
+
+        return MorningWakeAnalysis(
+            cutoff: cutoff,
+            firstWakeAfterCutoff: firstWakeAfterCutoff,
+            terminalWakeStart: terminalWakeStart,
+            terminalWakeDuration: terminalWakeDuration,
+            awakeOrInBedAfterCutoff: awakeOrInBedAfterCutoff,
+            sleepAfterCutoff: sleepAfterCutoff,
+            outOfBedEventCount: outOfBedEvents.filter(\.isMovementConfirmed).count,
+            outOfBedDuration: outOfBedEvents.filter(\.isMovementConfirmed).reduce(0) { $0 + $1.duration }
+        )
+    }
+
+    private func clippedDuration(_ segment: SleepTimelineSegment, from start: Date, to end: Date) -> TimeInterval {
+        let clippedStart = max(segment.startDate, start)
+        let clippedEnd = min(segment.endDate, end)
+        return max(0, clippedEnd.timeIntervalSince(clippedStart))
+    }
+}
+
+struct MorningWakeAnalysis {
+    let cutoff: Date
+    let firstWakeAfterCutoff: Date?
+    let terminalWakeStart: Date?
+    let terminalWakeDuration: TimeInterval
+    let awakeOrInBedAfterCutoff: TimeInterval
+    let sleepAfterCutoff: TimeInterval
+    let outOfBedEventCount: Int
+    let outOfBedDuration: TimeInterval
+
+    var hasEarlyMorningWakePattern: Bool {
+        terminalWakeDuration >= 20 * 60
+            || awakeOrInBedAfterCutoff >= 30 * 60
+            || outOfBedEventCount > 0
     }
 }
 

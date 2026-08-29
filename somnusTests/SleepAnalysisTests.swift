@@ -63,6 +63,37 @@ struct SleepAnalysisTests {
         #expect(session.fragmentationIndex > 0.1)
     }
 
+    @Test func morningWakeAnalysisSeparatesFinalWakeTail() {
+        let start = date("2026-05-01 22:30")
+        let session = SleepSession(
+            nightDate: calendar.startOfDay(for: start.addingTimeInterval(9 * 3600)),
+            stages: [
+                SleepStage(startDate: start, endDate: date("2026-05-02 04:05"), type: .core),
+                SleepStage(startDate: date("2026-05-02 04:05"), endDate: date("2026-05-02 04:20"), type: .awake),
+                SleepStage(startDate: date("2026-05-02 04:20"), endDate: date("2026-05-02 05:15"), type: .rem),
+                SleepStage(startDate: date("2026-05-02 05:15"), endDate: date("2026-05-02 06:00"), type: .awake),
+                SleepStage(startDate: date("2026-05-02 06:00"), endDate: date("2026-05-02 06:35"), type: .inBed),
+            ],
+            movementSamples: [
+                MovementSample(
+                    startDate: date("2026-05-02 04:08"),
+                    endDate: date("2026-05-02 04:10"),
+                    stepCount: 16,
+                    distance: 10,
+                    sourceName: "Watch"
+                )
+            ]
+        )
+
+        let analysis = session.morningWakeAnalysis(calendar: calendar)
+
+        #expect(analysis.terminalWakeDuration == 80 * 60)
+        #expect(analysis.awakeOrInBedAfterCutoff == 95 * 60)
+        #expect(analysis.sleepAfterCutoff == 60 * 60)
+        #expect(analysis.outOfBedEventCount == 1)
+        #expect(analysis.hasEarlyMorningWakePattern)
+    }
+
     @Test func trendSummaryCalculatesRollingBaselinesAndOutliers() {
         let start = date("2026-05-01 07:00")
         let sessions = (0..<10).map { offset in
@@ -152,6 +183,52 @@ struct SleepAnalysisTests {
         let visible = TrendWindow.visibleSessions(ranged, zoom: .month, endingAt: end, calendar: calendar)
 
         #expect(visible.map(\.nightDate) == sessions.dropFirst().map(\.nightDate).sorted())
+    }
+
+    @Test func trendWindowSupportsThreeYearRange() {
+        let end = date("2026-05-27 12:00")
+        let inside = SleepSession(
+            nightDate: calendar.startOfDay(for: calendar.date(byAdding: .year, value: -2, to: end)!),
+            stages: [
+                SleepStage(
+                    startDate: calendar.date(byAdding: .year, value: -2, to: end)!,
+                    endDate: calendar.date(byAdding: .year, value: -2, to: end)!.addingTimeInterval(3600),
+                    type: .core
+                )
+            ]
+        )
+        let outside = SleepSession(
+            nightDate: calendar.startOfDay(for: calendar.date(byAdding: .year, value: -4, to: end)!),
+            stages: [
+                SleepStage(
+                    startDate: calendar.date(byAdding: .year, value: -4, to: end)!,
+                    endDate: calendar.date(byAdding: .year, value: -4, to: end)!.addingTimeInterval(3600),
+                    type: .core
+                )
+            ]
+        )
+
+        let result = TrendWindow.sessions([outside, inside], range: .threeYears, endingAt: end, calendar: calendar)
+
+        #expect(result.map(\.id) == [inside.id])
+    }
+
+    @Test func trendWindowCanZoomLongRangesToOneYear() {
+        let end = date("2026-05-27 12:00")
+        let sessions = [700, 300].map { daysAgo in
+            let start = end.addingTimeInterval(TimeInterval(-daysAgo * 24 * 3600))
+            return SleepSession(
+                nightDate: calendar.startOfDay(for: start),
+                stages: [
+                    SleepStage(startDate: start, endDate: start.addingTimeInterval(3600), type: .core)
+                ]
+            )
+        }
+
+        let ranged = TrendWindow.sessions(sessions, range: .threeYears, endingAt: end, calendar: calendar)
+        let visible = TrendWindow.visibleSessions(ranged, zoom: .year, endingAt: end, calendar: calendar)
+
+        #expect(visible.map(\.id) == [sessions[1].id])
     }
 
     @Test func sleepHeartRateAveragesUsePrecomputedSessionWindows() {
@@ -276,7 +353,7 @@ struct SleepAnalysisTests {
     }
 
     @MainActor
-    @Test func metricsFetchWindowDoesNotExpandPastOneYearForLongHistory() {
+    @Test func metricsFetchWindowDoesNotExpandPastThreeYearsForLongHistory() {
         let now = date("2026-05-27 12:00")
         let oldStart = date("2021-01-01 23:00")
         let session = SleepSession(
@@ -288,8 +365,62 @@ struct SleepAnalysisTests {
 
         let window = SleepStore.metricsFetchWindow(for: [session], end: now, calendar: calendar)
 
-        #expect(window.start == calendar.date(byAdding: .year, value: -1, to: now)!)
+        #expect(window.start == calendar.date(byAdding: .year, value: -3, to: now)!)
         #expect(window.end == now)
+    }
+
+    @MainActor
+    @Test func foregroundRefreshReloadsOnlyOnceLastLoadIsStale() {
+        let now = date("2026-05-27 06:00")
+
+        // Never loaded: always reload.
+        #expect(SleepStore.shouldReload(lastLoadedAt: nil, now: now, minimumInterval: 60))
+
+        // A momentary trip through Control Center should not refetch the
+        // entire sleep history.
+        #expect(!SleepStore.shouldReload(
+            lastLoadedAt: now.addingTimeInterval(-15),
+            now: now,
+            minimumInterval: 60
+        ))
+
+        // A real return to the app after the watch has had time to sync.
+        #expect(SleepStore.shouldReload(
+            lastLoadedAt: now.addingTimeInterval(-90),
+            now: now,
+            minimumInterval: 60
+        ))
+
+        // Exactly at the boundary counts as stale.
+        #expect(SleepStore.shouldReload(
+            lastLoadedAt: now.addingTimeInterval(-60),
+            now: now,
+            minimumInterval: 60
+        ))
+
+        // A backwards clock jump must not pin the store into a stale state.
+        #expect(SleepStore.shouldReload(
+            lastLoadedAt: now.addingTimeInterval(3600),
+            now: now,
+            minimumInterval: 60
+        ))
+    }
+
+    @Test func regularityAnchorIsMidpointOfSleepOnsetAndFinalWake() {
+        let start = date("2026-05-01 23:00")
+        // Sleep onset at 23:30, final sleep ends at 06:00 — a long mid-sleep
+        // awakening should not drag the anchor away from that midpoint (02:45).
+        let session = SleepSession(
+            nightDate: calendar.startOfDay(for: start.addingTimeInterval(9 * 3600)),
+            stages: [
+                SleepStage(startDate: start, endDate: start.addingTimeInterval(30 * 60), type: .inBed),
+                SleepStage(startDate: start.addingTimeInterval(30 * 60), endDate: date("2026-05-02 02:00"), type: .core),
+                SleepStage(startDate: date("2026-05-02 02:00"), endDate: date("2026-05-02 03:00"), type: .awake),
+                SleepStage(startDate: date("2026-05-02 03:00"), endDate: date("2026-05-02 06:00"), type: .rem),
+            ]
+        )
+
+        #expect(session.regularityAnchor == date("2026-05-02 02:45"))
     }
 
     private func date(_ value: String) -> Date {

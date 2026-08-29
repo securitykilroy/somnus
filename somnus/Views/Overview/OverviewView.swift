@@ -2,6 +2,8 @@ import SwiftUI
 
 struct OverviewView: View {
     @Environment(SleepStore.self) var store
+    @Environment(SleepIntentStore.self) var intentStore
+    @Environment(PeakAlphaStore.self) var peakAlphaStore
 
     var body: some View {
         NavigationStack {
@@ -19,15 +21,25 @@ struct OverviewView: View {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 24) {
                             lastNightHeader(session)
+                            RecoveryScoreCardView(score: lastNightRecoveryScore)
+                            SleepIntentCaptureCard()
+                            PeakAlphaCaptureCard()
+                            MealLogCard()
                             InsightListView(sessions: store.sessions)
                             debtSection(session)
                             continuitySection(session)
+                            MorningWakeCardView(session: session)
                             QualityCardView(session: session)
                             weekSummarySection
                         }
                         .padding()
                     }
-                    .refreshable { await store.load() }
+                    .scrollDismissesKeyboard(.interactively)
+                    .refreshable {
+                        try? intentStore.load()
+                        try? await peakAlphaStore.loadAsync()
+                        await store.load()
+                    }
                 } else {
                     ContentUnavailableView(
                         "No Sleep Data",
@@ -37,6 +49,9 @@ struct OverviewView: View {
                 }
             }
             .navigationTitle("Overview")
+            .task {
+                try? await peakAlphaStore.loadAsync()
+            }
         }
     }
 
@@ -54,12 +69,88 @@ struct OverviewView: View {
                     .foregroundStyle(.secondary)
                     .alignmentGuide(.firstTextBaseline) { d in d[.firstTextBaseline] }
             }
+
+            stageDurations(session)
+
             HStack(spacing: 16) {
                 Label("\(Int(session.efficiency * 100))% efficiency", systemImage: "bed.double.fill")
                 Label("\(session.startTime.formatted(date: .omitted, time: .shortened)) – \(session.endTime.formatted(date: .omitted, time: .shortened))", systemImage: "clock")
             }
             .font(.subheadline)
             .foregroundStyle(.secondary)
+        }
+    }
+
+    private struct StageDuration: Identifiable {
+        var id: String { type.rawValue }
+        let type: SleepStageType
+        let duration: TimeInterval
+        /// Share of total sleep. `nil` for awake time, which is not part of
+        /// total sleep and so has no meaningful percentage.
+        let share: Double?
+
+        /// `SleepStageType.rawValue` is "Unspecified Sleep", too long for a
+        /// column this narrow.
+        var label: String {
+            type == .asleepUnspecified ? "Asleep" : type.rawValue
+        }
+    }
+
+    private func stageBreakdown(_ session: SleepSession) -> [StageDuration] {
+        let total = session.totalSleep
+        func share(_ duration: TimeInterval) -> Double? {
+            total > 0 ? duration / total : nil
+        }
+
+        return [
+            StageDuration(type: .deep, duration: session.deepDuration, share: share(session.deepDuration)),
+            StageDuration(type: .rem, duration: session.remDuration, share: share(session.remDuration)),
+            StageDuration(type: .core, duration: session.coreDuration, share: share(session.coreDuration)),
+            StageDuration(
+                type: .asleepUnspecified,
+                duration: session.unspecifiedSleepDuration,
+                share: share(session.unspecifiedSleepDuration)
+            ),
+            StageDuration(type: .awake, duration: session.awakeDuration, share: nil),
+        ].filter { $0.duration > 0 }
+    }
+
+    /// Plain text rather than a chart — the numbers are the point, and this
+    /// cannot be clipped or collapsed by chart layout on a narrow screen.
+    @ViewBuilder
+    private func stageDurations(_ session: SleepSession) -> some View {
+        let stages = stageBreakdown(session)
+        if !stages.isEmpty {
+            HStack(alignment: .top, spacing: 8) {
+                ForEach(stages) { stage in
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 4) {
+                            Circle()
+                                .fill(stage.type.color)
+                                .frame(width: 7, height: 7)
+                            Text(stage.label)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                        Text(stage.duration.hoursAndMinutes)
+                            .font(.subheadline.weight(.semibold))
+                            .monospacedDigit()
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.6)
+                        if let share = stage.share {
+                            Text(share.percentString)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                        }
+                    }
+                    // Equal shares of the row, so four stages cannot push each
+                    // other off the edge on a narrow iPhone.
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .padding(.top, 2)
         }
     }
 
@@ -113,6 +204,12 @@ struct OverviewView: View {
                     subtitle: "uninterrupted sleep"
                 )
                 MetricCardView(
+                    title: "Morning Tail",
+                    value: session.morningWakeAnalysis().terminalWakeDuration.hoursAndMinutes,
+                    subtitle: "final wake to get-up",
+                    valueColor: session.morningWakeAnalysis().terminalWakeDuration >= 20 * 60 ? .orange : .primary
+                )
+                MetricCardView(
                     title: "Fragmentation",
                     value: session.fragmentationIndex.percentString,
                     subtitle: "\(session.transitionCount) stage changes",
@@ -147,6 +244,14 @@ struct OverviewView: View {
                 }
             }
         }
+    }
+
+    private var lastNightRecoveryScore: RecoveryScore? {
+        RecoveryScoreCalculator.scores(
+            sessions: store.sessions,
+            dailyHRV: store.dailyHRV,
+            dailyRestingHR: store.dailyRestingHR
+        ).first
     }
 
     private var sevenDayRange: ClosedRange<Date> {

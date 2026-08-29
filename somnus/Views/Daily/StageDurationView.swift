@@ -20,6 +20,14 @@ struct StageDurationView: View {
         ].filter { $0.duration > 0 }
     }
 
+    /// Headroom past the longest bar so the trailing duration label has
+    /// somewhere to sit. Without it the longest bar ends at the plot edge and
+    /// its label is laid out into zero width.
+    private var xDomainUpperBound: Double {
+        let longest = stats.map(\.duration.asHours).max() ?? 1
+        return max(longest * 1.3, 1)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Time in Each Stage")
@@ -32,13 +40,22 @@ struct StageDurationView: View {
                 )
                 .foregroundStyle(stat.type.color)
                 .cornerRadius(4)
-                .annotation(position: .trailing, alignment: .leading) {
+                .annotation(
+                    position: .trailing,
+                    alignment: .center,
+                    spacing: 6,
+                    // Pull a label back inside rather than letting it clip.
+                    overflowResolution: .init(x: .fit(to: .chart), y: .disabled)
+                ) {
                     Text(stat.duration.hoursAndMinutes)
+                        // Charts proposes zero width to an annotation with no
+                        // room, which truncates the text away entirely.
+                        .fixedSize()
                         .font(.caption2)
                         .foregroundStyle(.secondary)
-                        .padding(.leading, 4)
                 }
             }
+            .chartXScale(domain: 0...xDomainUpperBound)
             .chartXAxis {
                 AxisMarks { value in
                     if let h = value.as(Double.self) {
@@ -61,4 +78,31 @@ struct StageDurationView: View {
         .padding()
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
     }
+}
+
+#Preview {
+    let start = Calendar.current.date(byAdding: .hour, value: -8, to: Date())!
+    // Built inline rather than via a helper function: a local `func` does not
+    // inherit the preview body's main-actor isolation.
+    let spans: [(SleepStageType, Double, Double)] = [
+        (.core, 0, 2.4),
+        (.deep, 2.4, 0.8),
+        (.rem, 3.2, 1.5),
+        (.awake, 4.7, 0.6),
+        (.core, 5.3, 2.2),
+    ]
+
+    StageDurationView(
+        session: SleepSession(
+            nightDate: Calendar.current.startOfDay(for: Date()),
+            stages: spans.map { type, offsetHours, lengthHours in
+                SleepStage(
+                    startDate: start.addingTimeInterval(offsetHours * 3600),
+                    endDate: start.addingTimeInterval((offsetHours + lengthHours) * 3600),
+                    type: type
+                )
+            }
+        )
+    )
+    .padding()
 }

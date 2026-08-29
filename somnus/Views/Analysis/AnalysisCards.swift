@@ -158,6 +158,56 @@ struct AwakeEventListView: View {
     }
 }
 
+struct MorningWakeCardView: View {
+    let session: SleepSession
+
+    var body: some View {
+        let analysis = session.morningWakeAnalysis()
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Early Morning")
+                        .font(.headline)
+                    Text("After \(analysis.cutoff.formatted(date: .omitted, time: .shortened))")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Image(systemName: analysis.hasEarlyMorningWakePattern ? "sunrise.fill" : "sunrise")
+                    .font(.title2)
+                    .foregroundStyle(analysis.hasEarlyMorningWakePattern ? .orange : .secondary)
+            }
+
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                metric("Tail", analysis.terminalWakeDuration.hoursAndMinutes, "final wake to get-up")
+                metric("Awake/In Bed", analysis.awakeOrInBedAfterCutoff.hoursAndMinutes, "after cutoff")
+                metric("Sleep After", analysis.sleepAfterCutoff.hoursAndMinutes, "after cutoff")
+                metric("Out of Bed", "\(analysis.outOfBedEventCount)", analysis.outOfBedDuration.hoursAndMinutes)
+            }
+        }
+        .padding()
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    private func metric(_ title: String, _ value: String, _ subtitle: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.subheadline.bold())
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+            Text(subtitle)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
 enum SleepInsightEngine {
     static func insights(for sessions: [SleepSession]) -> [String] {
         guard let latest = sessions.first else { return [] }
@@ -189,6 +239,12 @@ enum SleepInsightEngine {
         }
         if latest.movementConfirmedAwakeningCount > 0 {
             result.append("\(latest.movementConfirmedAwakeningCount) awake event\(latest.movementConfirmedAwakeningCount == 1 ? "" : "s") had movement evidence, suggesting likely out-of-bed time.")
+        }
+        let morning = latest.morningWakeAnalysis()
+        if morning.terminalWakeDuration >= 20 * 60 {
+            result.append("The final early-morning wake tail lasted \(morning.terminalWakeDuration.hoursAndMinutes).")
+        } else if morning.awakeOrInBedAfterCutoff >= 30 * 60 {
+            result.append("There was \(morning.awakeOrInBedAfterCutoff.hoursAndMinutes) awake or in-bed time after 4 AM.")
         }
         return result.isEmpty ? ["Last night was close to your recent baseline across duration and continuity."] : result
     }
