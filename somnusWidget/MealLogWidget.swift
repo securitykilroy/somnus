@@ -54,7 +54,7 @@ struct MealLogWidget: Widget {
                 .containerBackground(.fill.tertiary, for: .widget)
         }
         .configurationDisplayName("Meal Log")
-        .description("Log that you ate without opening Somnus, and see how long it has been.")
+        .description("Add what you ate, or log just the time, without going through the app.")
         .supportedFamilies([.systemSmall, .systemMedium])
     }
 }
@@ -70,25 +70,33 @@ struct MealLogWidgetEntryView: View {
         }
     }
 
+    /// `widgetURL` rather than a `Link`: a small widget has a single tap
+    /// target, so tapping anywhere but the button opens the app to type a
+    /// description.
     private var smallBody: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sinceLastMeal
+            lastMealSummary
             Spacer(minLength: 0)
-            logButton(minutesAgo: 0, label: "Ate now", systemImage: "fork.knife")
+            Text("Tap to add what you ate")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+            quickLogButton
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .widgetURL(MealDeepLink.logMeal)
     }
 
     private var mediumBody: some View {
         HStack(alignment: .top, spacing: 14) {
             VStack(alignment: .leading, spacing: 8) {
-                sinceLastMeal
+                lastMealSummary
                 Spacer(minLength: 0)
-                logButton(minutesAgo: 0, label: "Ate now", systemImage: "fork.knife")
-                HStack(spacing: 6) {
-                    logButton(minutesAgo: 30, label: "30m ago", systemImage: nil)
-                    logButton(minutesAgo: 60, label: "1h ago", systemImage: nil)
+                Link(destination: MealDeepLink.logMeal) {
+                    buttonLabel("Add meal…", systemImage: "fork.knife", prominent: true)
                 }
+                quickLogButton
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -131,47 +139,68 @@ struct MealLogWidgetEntryView: View {
         }
     }
 
-    /// Relative style rather than a computed interval so the label keeps
-    /// counting up between timeline reloads.
+    /// The clock time, never an elapsed count.
+    ///
+    /// This began as `Text(_, style: .relative)`, which dodges timeline
+    /// refreshes by ticking on its own — but it starts at zero the instant you
+    /// log something, so the widget looked like the button had started a
+    /// stopwatch. A wall-clock time answers "when did I last eat" without
+    /// moving, and never goes stale between reloads.
     @ViewBuilder
-    private var sinceLastMeal: some View {
+    private var lastMealSummary: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text("Last meal")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
             if let lastMeal = entry.lastMeal {
-                Text(lastMeal.timestamp, style: .relative)
-                    .font(.system(.title3, design: .rounded, weight: .semibold))
+                Text(lastMeal.timestamp, format: .dateTime.hour().minute())
+                    .font(.system(.title2, design: .rounded, weight: .semibold))
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
-                Text(lastMeal.displayLabel)
+                Text(lastMealCaption(lastMeal))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             } else {
                 Text("None logged")
-                    .font(.system(.title3, design: .rounded, weight: .semibold))
+                    .font(.system(.title2, design: .rounded, weight: .semibold))
                     .foregroundStyle(.secondary)
             }
         }
     }
 
-    private func logButton(minutesAgo: Int, label: String, systemImage: String?) -> some View {
-        Button(intent: QuickLogMealIntent(minutesAgo: minutesAgo)) {
-            HStack(spacing: 4) {
-                if let systemImage {
-                    Image(systemName: systemImage)
-                }
-                Text(label)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-            }
-            .font(.caption.weight(.medium))
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 6)
-            .background(.quaternary, in: Capsule())
+    /// Names the day when the last meal was not today, so a morning glance does
+    /// not read "8:14 PM" as if it had just happened.
+    private func lastMealCaption(_ meal: MealEvent) -> String {
+        let calendar = Calendar.current
+        if !calendar.isDate(meal.timestamp, inSameDayAs: entry.date) {
+            let day = meal.timestamp.formatted(.dateTime.weekday(.abbreviated))
+            return meal.hasNote ? "\(day) · \(meal.note)" : day
+        }
+        return meal.displayLabel
+    }
+
+    /// The no-typing path, for when you want the time recorded and will fill in
+    /// what it was later. Runs in the widget process, so the app never launches.
+    private var quickLogButton: some View {
+        Button(intent: QuickLogMealIntent(minutesAgo: 0)) {
+            buttonLabel("Log time only", systemImage: "clock", prominent: false)
         }
         .buttonStyle(.plain)
+    }
+
+    private func buttonLabel(_ title: String, systemImage: String, prominent: Bool) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: systemImage)
+            Text(title)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .font(.caption.weight(.medium))
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 6)
+        .background(prominent ? AnyShapeStyle(.tint) : AnyShapeStyle(.quaternary), in: Capsule())
+        .foregroundStyle(prominent ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
     }
 }
 

@@ -6,6 +6,7 @@ struct ContentView: View {
     @Environment(PeakAlphaStore.self) var peakAlphaStore
     @Environment(MealStore.self) var mealStore
     @Environment(\.scenePhase) private var scenePhase
+    @State private var loggingMeal = false
 
     var body: some View {
         TabView {
@@ -34,6 +35,16 @@ struct ContentView: View {
             // small local file, unlike the HealthKit refresh below.
             mealStore.reload()
             Task { await store.refreshIfStale() }
+        }
+        .onOpenURL { url in
+            // Presented over whatever is on screen rather than routed to a tab:
+            // the point of the deep link is to get a description typed and be
+            // gone, not to navigate anywhere.
+            guard MealDeepLink.isLogMeal(url) else { return }
+            loggingMeal = true
+        }
+        .sheet(isPresented: $loggingMeal) {
+            MealEntrySheet()
         }
         .onChange(of: store.lastLoadedAt) {
             // Covers every reload path, including ones the observer triggered

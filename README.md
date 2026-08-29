@@ -35,7 +35,7 @@ It also records what you eat, via Siri or a Home Screen widget, so meal timing a
 - **CSV export** — share the visible range and the metrics that drive the trend and correlation charts, including per-night meal columns
 
 ### Meal Logging
-- **Log without opening the app** — meals are recorded through an App Intent, so nothing has to wait on the HealthKit load that a cold launch performs
+- **Log without opening the app** — Siri and the widget's quick button record through an App Intent, so nothing waits on the HealthKit load that a cold launch performs
 - **Free-text entries** — a timestamp plus a rough description ("big pasta dinner", "two beers"); no calorie counts, portion sizes or preset categories
 - **Meal timing vs. sleep** — hours between the last meal and sleep onset, scattered against efficiency, deep sleep %, and time awake in bed, plus a late-meal/early-meal comparison
 - **In-app card** — correct a time logged late, attach a description to a bare widget tap, or delete a mis-tap
@@ -79,12 +79,16 @@ This is the path for "had a big pasta dinner at 4:30pm" in a single step, and fo
 
 ### Home Screen widget
 
-Long-press the Home Screen → **Edit** → **Add Widget** → **Somnus** → **Meal Log**. Two sizes:
+Long-press the Home Screen → **Edit** → **Add Widget** → **Somnus** → **Meal Log**. Both sizes show the clock time of your last meal and offer two actions:
 
-- **Small** — time since your last meal, and one **Ate now** button
-- **Medium** — the same, plus **30m ago** and **1h ago** for a late tap, today's entries, and an undo button that appears for 15 minutes after a mis-tap
+| Action | What happens |
+|---|---|
+| **Tap the widget** (small) / **Add meal…** (medium) | Opens Somnus straight to a text field with the keyboard up, via the `somnus://log-meal` URL. This is the only meal path that launches the app. |
+| **Log time only** | Records the timestamp with no description, entirely inside the widget extension's process. The app is never launched. |
 
-Widget buttons run `QuickLogMealIntent` inside the widget extension's own process, so the app is never launched at all. They record the time without a description; add one later from the app if it matters.
+A widget button runs its App Intent headlessly and **cannot present a text field** — so recording *what* you ate necessarily means opening the app, or using Siri, which can prompt. The **Log time only** button exists for when you want the timing captured now and will fill in the description later from the Meals card.
+
+The medium size also lists today's entries, with an undo button that appears for 15 minutes after a mis-tap.
 
 ### In the app
 
@@ -127,6 +131,7 @@ A meal counts toward a night if it falls between the start of the previous calen
 - **`SleepTrendSummary`** — aggregates sessions over configurable windows to compute regularity scores, debt trends, and weekly summaries
 - **`MealLogStore`** — the shared meal log; a coordinated JSON file in the App Group container, readable and writable from the app, the widget extension and the intents alike
 - **`LogMealIntent`** / **`SomnusAppShortcuts`** — the Siri and Shortcuts entry point, in the app target; `QuickLogMealIntent` and `UndoLastMealIntent` live in the widget extension instead, so each intent is registered by exactly one binary
+- **`MealDeepLink`** / **`MealEntrySheet`** — the `somnus://log-meal` route the widget uses when an entry needs typing, and the sheet it opens over whatever the app is already showing
 - **`MealSleepAnalyzer`** — pairs each night with everything eaten from the previous morning up to sleep onset, and splits nights into late- and early-meal groups for comparison
 
 ### HealthKit data types read

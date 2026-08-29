@@ -408,6 +408,21 @@ struct MealCSVExportTests {
     }
 }
 
+struct MealDeepLinkTests {
+    @Test func theWidgetsLogURLIsRecognised() {
+        #expect(MealDeepLink.isLogMeal(MealDeepLink.logMeal))
+        #expect(MealDeepLink.isLogMeal(URL(string: "somnus://log-meal")!))
+    }
+
+    /// The app opens a sheet on this URL, so anything else must be ignored
+    /// rather than silently treated as a meal.
+    @Test func otherURLsAreIgnored() {
+        #expect(!MealDeepLink.isLogMeal(URL(string: "somnus://trends")!))
+        #expect(!MealDeepLink.isLogMeal(URL(string: "https://example.com/log-meal")!))
+        #expect(!MealDeepLink.isLogMeal(URL(string: "othersleepapp://log-meal")!))
+    }
+}
+
 /// A minimal RFC 4180 reader, so the export tests verify what a spreadsheet or
 /// an analysis tool would actually read back rather than what the raw text
 /// happens to contain.
