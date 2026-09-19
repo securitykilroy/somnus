@@ -1,7 +1,7 @@
 import Foundation
 import HealthKit
 
-enum SleepStageType: String, CaseIterable, Identifiable {
+nonisolated enum SleepStageType: String, CaseIterable, Identifiable {
     case core = "Core"
     case deep = "Deep"
     case rem = "REM"
@@ -42,7 +42,7 @@ enum SleepStageType: String, CaseIterable, Identifiable {
     }
 }
 
-struct SleepStage: Identifiable {
+nonisolated struct SleepStage: Identifiable {
     let id: UUID
     let startDate: Date
     let endDate: Date

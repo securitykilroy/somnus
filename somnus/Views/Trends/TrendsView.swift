@@ -206,8 +206,11 @@ struct TrendsView: View {
             }
             .navigationTitle("Trends")
             .toolbar {
-                if let exportURL = trendsExportURL {
-                    ShareLink(item: exportURL) {
+                if let trendsExport {
+                    ShareLink(
+                        item: trendsExport,
+                        preview: SharePreview("Somnus trends CSV")
+                    ) {
                         Image(systemName: "square.and.arrow.up")
                     }
                     .accessibilityLabel("Export Trends CSV")
@@ -347,16 +350,27 @@ struct TrendsView: View {
         return peakAlphaStore.entries.filter { $0.day >= start && $0.day <= end }
     }
 
-    private var trendsExportURL: URL? {
-        guard !visibleSessions.isEmpty else { return nil }
-        return try? CSVExporter.trendsFile(
-            sessions: visibleSessions,
-            dailyCalories: filteredCalories,
-            dailyRestingHR: filteredRestingHR,
-            dailyHRV: filteredHRV,
-            sleepHeartRates: store.sleepHeartRates,
-            meals: mealStore.events
-        ).writeTemporaryFile()
+    /// Captures the inputs; the CSV itself is not built until the share sheet
+    /// resolves the document. See `CSVExportDocument`.
+    private var trendsExport: CSVExportDocument? {
+        let sessions = visibleSessions
+        guard !sessions.isEmpty else { return nil }
+        let calories = filteredCalories
+        let restingHR = filteredRestingHR
+        let hrv = filteredHRV
+        let sleepHeartRates = store.sleepHeartRates
+        let meals = mealStore.events
+
+        return CSVExportDocument {
+            CSVExporter.trendsFile(
+                sessions: sessions,
+                dailyCalories: calories,
+                dailyRestingHR: restingHR,
+                dailyHRV: hrv,
+                sleepHeartRates: sleepHeartRates,
+                meals: meals
+            )
+        }
     }
 
     private func publishLatencySnapshots() {

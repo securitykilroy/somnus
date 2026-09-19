@@ -130,10 +130,59 @@ struct PeakAlphaStoreTests {
 
         #expect(store.entries.count == 1)
         #expect(store.entries.first?.value == 10.2)
-        #expect(FileManager.default.fileExists(atPath: legacyURL.path))
+        // The legacy file is consumed, not copied. Leaving it in place meant
+        // every later cold launch migrated it again.
+        #expect(!FileManager.default.fileExists(atPath: legacyURL.path))
         #expect(FileManager.default.fileExists(
             atPath: directory.appendingPathComponent("PeakAlphaEntries.migrated.json").path
         ))
+    }
+
+    /// Regression: a migrated reading that the user deletes must stay deleted.
+    ///
+    /// The archive the migration writes used to be listed as a migration
+    /// source, and the original was copied rather than moved, so both files
+    /// re-imported the deleted day on the next cold launch — and CloudKit
+    /// pushed the revived row to the user's other devices.
+    @MainActor
+    @Test func deletingAMigratedEntryDoesNotResurrectItOnRelaunch() async throws {
+        let directory = try Self.makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let legacyURL = directory.appendingPathComponent("PeakAlphaEntries.json")
+        let backupURL = directory.appendingPathComponent("PeakAlphaEntries.backup.json")
+        let storeURL = directory.appendingPathComponent("SomnusPeakAlphaModel.sqlite")
+        let day = Self.calendar.date(from: DateComponents(year: 2026, month: 5, day: 6, hour: 9))!
+
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        try encoder.encode([PeakAlphaEntry(date: day, value: 12.5, note: "Legacy")])
+            .write(to: legacyURL)
+
+        func openStore() throws -> PeakAlphaStore {
+            try PeakAlphaStore(
+                inMemory: false,
+                useCloudKit: false,
+                storeURL: storeURL,
+                // Mirrors the production default: the original and the
+                // backup, but deliberately not the `.migrated.json` archive.
+                legacyJSONFileURLs: [legacyURL, backupURL],
+                backupJSONFileURL: backupURL
+            )
+        }
+
+        let first = try openStore()
+        try await first.loadAsync()
+        let migrated = try #require(first.entries.first)
+        #expect(first.entries.count == 1)
+
+        try first.remove(migrated)
+        #expect(first.entries.isEmpty)
+
+        // A second launch against the same store and the same directory.
+        let second = try openStore()
+        try await second.loadAsync()
+        #expect(second.entries.isEmpty)
     }
 
     @MainActor

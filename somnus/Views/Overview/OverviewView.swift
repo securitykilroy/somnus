@@ -21,7 +21,7 @@ struct OverviewView: View {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 24) {
                             lastNightHeader(session)
-                            RecoveryScoreCardView(score: lastNightRecoveryScore)
+                            RecoveryScoreCardView(score: store.lastNightRecoveryScore)
                             SleepIntentCaptureCard()
                             PeakAlphaCaptureCard()
                             MealLogCard()
@@ -244,14 +244,6 @@ struct OverviewView: View {
                 }
             }
         }
-    }
-
-    private var lastNightRecoveryScore: RecoveryScore? {
-        RecoveryScoreCalculator.scores(
-            sessions: store.sessions,
-            dailyHRV: store.dailyHRV,
-            dailyRestingHR: store.dailyRestingHR
-        ).first
     }
 
     private var sevenDayRange: ClosedRange<Date> {

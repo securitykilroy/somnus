@@ -45,8 +45,11 @@ struct DailyView: View {
             }
             .navigationTitle("Daily")
             .toolbar {
-                if let exportURL = dailyExportURL {
-                    ShareLink(item: exportURL) {
+                if let dailyExport {
+                    ShareLink(
+                        item: dailyExport,
+                        preview: SharePreview("Somnus night CSV")
+                    ) {
                         Image(systemName: "square.and.arrow.up")
                     }
                     .accessibilityLabel("Export Daily CSV")
@@ -58,9 +61,14 @@ struct DailyView: View {
         }
     }
 
-    private var dailyExportURL: URL? {
-        guard let currentSession else { return nil }
-        return try? CSVExporter.dailyFile(for: currentSession, meals: mealStore.events).writeTemporaryFile()
+    /// Built on demand rather than on every layout pass — see
+    /// `CSVExportDocument`.
+    private var dailyExport: CSVExportDocument? {
+        guard let session = currentSession else { return nil }
+        let meals = mealStore.events
+        return CSVExportDocument {
+            CSVExporter.dailyFile(for: session, meals: meals)
+        }
     }
 
     @ViewBuilder

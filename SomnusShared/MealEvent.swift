@@ -8,7 +8,7 @@ import Foundation
 /// gap between the last meal and sleep onset is what correlates with sleep,
 /// and demanding a description before an entry can exist would cost more
 /// entries than the descriptions are worth.
-struct MealEvent: Identifiable, Hashable, Codable, Sendable {
+nonisolated struct MealEvent: Identifiable, Hashable, Codable, Sendable {
     let id: UUID
     var timestamp: Date
     var note: String

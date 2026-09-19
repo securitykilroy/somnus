@@ -299,11 +299,23 @@ final class PeakAlphaStore {
             try? writeBackupJSONStore()
         }
 
-        if legacyURL.lastPathComponent != Self.migratedLegacyJSONFileName {
+        // Moved, not copied. A copy left the original in place, so every
+        // subsequent cold launch migrated it again — re-importing any day the
+        // user had since deleted. The backup file is exempt: it is live state
+        // that `writeBackupJSONStore` keeps current, not a one-off import.
+        if legacyURL != backupJSONFileURL,
+           legacyURL.lastPathComponent != Self.migratedLegacyJSONFileName {
             let archivedURL = legacyURL.deletingLastPathComponent()
                 .appendingPathComponent(Self.migratedLegacyJSONFileName)
             try? FileManager.default.removeItem(at: archivedURL)
-            try? FileManager.default.copyItem(at: legacyURL, to: archivedURL)
+            do {
+                try FileManager.default.moveItem(at: legacyURL, to: archivedURL)
+            } catch {
+                // If the move fails the original must still go, or it will be
+                // re-imported on the next launch.
+                try? FileManager.default.copyItem(at: legacyURL, to: archivedURL)
+                try? FileManager.default.removeItem(at: legacyURL)
+            }
         }
     }
 
@@ -341,11 +353,21 @@ final class PeakAlphaStore {
         return directory.appendingPathComponent(backupJSONFileName)
     }
 
+    /// The archive (`.migrated.json`) is deliberately *not* a source.
+    ///
+    /// It used to be listed here, and because migration re-imports any day the
+    /// store does not currently hold, a reading the user deleted came straight
+    /// back on the next cold launch — and CloudKit pushed the revived row to
+    /// their other devices. The archive is a frozen copy of what was migrated;
+    /// reading it back is exactly the thing that must not happen.
+    ///
+    /// The backup stays a source: `writeBackupJSONStore` rewrites it after
+    /// every add and delete, so it always reflects the current set and can only
+    /// restore, never resurrect.
     private static func defaultLegacyJSONFileURLs(backupJSONFileURL: URL) -> [URL] {
         let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         return [
             directory.appendingPathComponent("PeakAlphaEntries.json"),
-            directory.appendingPathComponent(migratedLegacyJSONFileName),
             backupJSONFileURL
         ]
     }

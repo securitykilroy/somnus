@@ -25,6 +25,15 @@ final class WidgetSomnusStore {
     private static let latencySnapshotEntityName = "SleepLatencySnapshotEntity"
     private static let cloudKitContainerIdentifier = "iCloud.com.washere.somnus"
 
+    /// One stack for the extension process.
+    ///
+    /// Each timeline request used to build its own
+    /// `NSPersistentCloudKitContainer` and call `loadPersistentStores` again —
+    /// standing up a CloudKit sync engine from scratch, twice per refresh
+    /// (snapshot and timeline), inside a watchOS widget's memory and time
+    /// budget. The container is designed to be loaded once and kept.
+    static let shared = WidgetSomnusStore()
+
     private let container: NSPersistentCloudKitContainer
 
     init(useCloudKit: Bool? = nil) {
@@ -50,35 +59,39 @@ final class WidgetSomnusStore {
     }
 
     func latestLatencySnapshot() async -> WidgetSleepLatencySnapshot? {
-        await withCheckedContinuation { continuation in
+        guard await loadStoresIfNeeded() else { return nil }
+
+        let context = container.viewContext
+        let entityName = Self.latencySnapshotEntityName
+
+        return await context.perform {
+            let request = NSFetchRequest<NSManagedObject>(entityName: entityName)
+            request.fetchLimit = 1
+            request.sortDescriptors = [NSSortDescriptor(key: "nightDate", ascending: false)]
+
+            guard let object = try? context.fetch(request).first,
+                  let nightDate = object.value(forKey: "nightDate") as? Date else {
+                return nil
+            }
+
+            return WidgetSleepLatencySnapshot(
+                nightDate: nightDate,
+                latency: object.value(forKey: "latency") as? TimeInterval ?? 0,
+                appleLatency: object.value(forKey: "appleLatency") as? TimeInterval ?? 0
+            )
+        }
+    }
+
+    /// Loads the stores only the first time. `loadPersistentStores` is not
+    /// meant to be called repeatedly on the same container — a second call adds
+    /// another store to the coordinator — so the coordinator's own state is the
+    /// check, matching `WatchSomnusStore` and `SleepIntentStore`.
+    private func loadStoresIfNeeded() async -> Bool {
+        guard container.persistentStoreCoordinator.persistentStores.isEmpty else { return true }
+
+        return await withCheckedContinuation { continuation in
             container.loadPersistentStores { _, error in
-                guard error == nil else {
-                    continuation.resume(returning: nil)
-                    return
-                }
-
-                let context = self.container.viewContext
-                let request = NSFetchRequest<NSManagedObject>(entityName: Self.latencySnapshotEntityName)
-                request.fetchLimit = 1
-                request.sortDescriptors = [NSSortDescriptor(key: "nightDate", ascending: false)]
-
-                do {
-                    guard let object = try context.fetch(request).first,
-                          let nightDate = object.value(forKey: "nightDate") as? Date else {
-                        continuation.resume(returning: nil)
-                        return
-                    }
-
-                    continuation.resume(
-                        returning: WidgetSleepLatencySnapshot(
-                            nightDate: nightDate,
-                            latency: object.value(forKey: "latency") as? TimeInterval ?? 0,
-                            appleLatency: object.value(forKey: "appleLatency") as? TimeInterval ?? 0
-                        )
-                    )
-                } catch {
-                    continuation.resume(returning: nil)
-                }
+                continuation.resume(returning: error == nil)
             }
         }
     }

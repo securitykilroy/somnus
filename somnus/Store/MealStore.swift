@@ -21,8 +21,14 @@ final class MealStore {
 
     /// Called on foreground as well as after edits: a widget tap or a Siri
     /// phrase can have appended entries while the app sat in the background.
+    ///
+    /// A log that cannot be read leaves the previous entries in place rather
+    /// than publishing an empty list — this runs on every scene activation, and
+    /// a transient file-coordination failure should not look like the user has
+    /// never logged a meal.
     func reload() {
-        events = log.read()
+        guard let latest = log.readOrFail() else { return }
+        events = latest
     }
 
     func events(on date: Date, calendar: Calendar = .current) -> [MealEvent] {

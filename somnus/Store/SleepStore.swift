@@ -33,6 +33,16 @@ final class SleepStore {
     var dailyMindfulMinutes: [DailyMetricSample] = []
     var sleepHeartRates: [Date: Double] = [:]
 
+    /// Recomputed once per load rather than inside a view body.
+    ///
+    /// The Overview card read `RecoveryScoreCalculator.scores(...).first`, and
+    /// because the score is a z-score against the person's own baseline that
+    /// call rebuilt the baseline over every night in the history — on every
+    /// render, to show one number.
+    private(set) var recoveryScores: [RecoveryScore] = []
+
+    var lastNightRecoveryScore: RecoveryScore? { recoveryScores.first }
+
     private let healthKit = HealthKitManager()
     private let widgetSnapshots = SleepWidgetSnapshotStore()
     private var loadTask: Task<Void, Never>?
@@ -149,13 +159,12 @@ final class SleepStore {
             // back into actor-isolated code just to derive these.
             let hk = healthKit
             let window = Self.metricsFetchWindow(for: fetched)
-            let toEnrich  = fetched.filter { window.contains($0.nightDate) }
-            let forMetrics = fetched.filter { window.contains($0.nightDate) }
+            let inWindow = fetched.filter { window.contains($0.nightDate) }
 
             // Task.detached (not Task {}) so these run on the cooperative thread
             // pool rather than inheriting @MainActor, keeping the UI responsive.
             Task.detached(priority: .utility) { [weak self] in
-                guard let enriched = try? await hk.enrichSessionsWithMovement(toEnrich) else { return }
+                guard let enriched = try? await hk.enrichSessionsWithMovement(inWindow) else { return }
                 let byDate = Dictionary(uniqueKeysWithValues: enriched.map { ($0.nightDate, $0) })
                 await MainActor.run { [weak self] in
                     guard let self else { return }
@@ -171,13 +180,19 @@ final class SleepStore {
             async let hrv     = hk.fetchDailyMetrics(identifier: .heartRateVariabilitySDNN,
                                                      unit: .secondUnit(with: .milli),
                                                      start: window.start, end: window.end)
-            async let sleepHR = hk.fetchSleepHeartRates(sessions: forMetrics)
+            async let sleepHR = hk.fetchSleepHeartRates(sessions: inWindow)
             async let mindful = hk.fetchDailyMindfulMinutes(start: window.start, end: window.end)
-            dailyCalories       = MetricDataQuality.plausibleDailyActiveCalories((try? await cals) ?? [])
+            // Already filtered inside `fetchDailyCalories`; not re-filtered here.
+            dailyCalories       = (try? await cals)    ?? []
             dailyRestingHR      = (try? await rhr)     ?? []
             dailyHRV            = (try? await hrv)     ?? []
             sleepHeartRates     = (try? await sleepHR) ?? [:]
             dailyMindfulMinutes = (try? await mindful) ?? []
+            recoveryScores = RecoveryScoreCalculator.scores(
+                sessions: sessions,
+                dailyHRV: dailyHRV,
+                dailyRestingHR: dailyRestingHR
+            )
             lastLoadedAt = Date()
             publishWidgetSnapshot()
         } catch {

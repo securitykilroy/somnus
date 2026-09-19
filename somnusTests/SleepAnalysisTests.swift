@@ -423,6 +423,131 @@ struct SleepAnalysisTests {
         #expect(session.regularityAnchor == date("2026-05-02 02:45"))
     }
 
+    // MARK: - Regressions
+
+    /// One continuous awakening delivered as consecutive samples is one
+    /// awakening, not one per sample.
+    @Test func consecutiveAwakeSamplesCountAsASingleAwakening() {
+        let start = date("2026-05-01 22:00")
+        let session = SleepSession(
+            nightDate: calendar.startOfDay(for: start.addingTimeInterval(9 * 3600)),
+            stages: [
+                SleepStage(startDate: start, endDate: start.addingTimeInterval(3600), type: .core),
+                // The watch writes a 15-minute wake as three touching samples.
+                SleepStage(startDate: start.addingTimeInterval(3600), endDate: start.addingTimeInterval(3600 + 5 * 60), type: .awake),
+                SleepStage(startDate: start.addingTimeInterval(3600 + 5 * 60), endDate: start.addingTimeInterval(3600 + 10 * 60), type: .awake),
+                SleepStage(startDate: start.addingTimeInterval(3600 + 10 * 60), endDate: start.addingTimeInterval(3600 + 15 * 60), type: .awake),
+                SleepStage(startDate: start.addingTimeInterval(3600 + 15 * 60), endDate: start.addingTimeInterval(6 * 3600), type: .core),
+            ]
+        )
+
+        #expect(session.awakeningCount == 1)
+        #expect(session.wakeAfterSleepOnset == 15 * 60)
+    }
+
+    /// Two awakenings separated by sleep stay two.
+    @Test func separatedAwakeningsAreCountedSeparately() {
+        let start = date("2026-05-01 22:00")
+        let session = SleepSession(
+            nightDate: calendar.startOfDay(for: start.addingTimeInterval(9 * 3600)),
+            stages: [
+                SleepStage(startDate: start, endDate: start.addingTimeInterval(3600), type: .core),
+                SleepStage(startDate: start.addingTimeInterval(3600), endDate: start.addingTimeInterval(3600 + 5 * 60), type: .awake),
+                SleepStage(startDate: start.addingTimeInterval(3600 + 5 * 60), endDate: start.addingTimeInterval(2 * 3600), type: .core),
+                SleepStage(startDate: start.addingTimeInterval(2 * 3600), endDate: start.addingTimeInterval(2 * 3600 + 5 * 60), type: .awake),
+                SleepStage(startDate: start.addingTimeInterval(2 * 3600 + 5 * 60), endDate: start.addingTimeInterval(6 * 3600), type: .core),
+            ]
+        )
+
+        #expect(session.awakeningCount == 2)
+    }
+
+    /// The same night reloaded is the same night as far as SwiftUI is
+    /// concerned — identity comes from the date, not from a fresh UUID.
+    @Test func sessionIdentityIsStableAcrossReloads() {
+        let start = date("2026-05-01 22:00")
+        let night = calendar.startOfDay(for: start.addingTimeInterval(9 * 3600))
+        let stages = [
+            SleepStage(startDate: start, endDate: start.addingTimeInterval(6 * 3600), type: .core)
+        ]
+
+        let first = SleepSession(nightDate: night, stages: stages)
+        let second = SleepSession(nightDate: night, stages: stages)
+        let other = SleepSession(
+            nightDate: calendar.date(byAdding: .day, value: 1, to: night)!,
+            stages: stages
+        )
+
+        #expect(first.id == second.id)
+        #expect(first.id != other.id)
+    }
+
+    /// Bedtimes either side of midnight are an hour apart, not eleven.
+    @Test func bedtimeDriftIsMeasuredAroundTheClock() {
+        // 23:00, 23:30, 00:00, 00:30 — a 1.5-hour spread straddling midnight.
+        let sessions = [
+            "2026-05-01 23:00",
+            "2026-05-02 23:30",
+            "2026-05-04 00:00",
+            "2026-05-05 00:30",
+        ].map { value -> SleepSession in
+            let bedtime = date(value)
+            return SleepSession(
+                nightDate: calendar.startOfDay(for: bedtime.addingTimeInterval(9 * 3600)),
+                stages: [
+                    SleepStage(startDate: bedtime, endDate: bedtime.addingTimeInterval(7 * 3600), type: .core)
+                ]
+            )
+        }
+
+        let summary = SleepTrendSummary(sessions: sessions, targetSleep: 8 * 3600)
+
+        // The arithmetic mean of these four clock times is ~11:45, which used
+        // to put every night ~11.7 hours from the anchor.
+        #expect(summary.bedtimeVariability < 45 * 60)
+    }
+
+    @Test func circularMeanWrapsAroundMidnight() {
+        let beforeMidnight: TimeInterval = 23 * 3600
+        let afterMidnight: TimeInterval = 1 * 3600
+        let mean = SleepTrendSummary.circularMean([beforeMidnight, afterMidnight])
+
+        // Midnight, not noon.
+        #expect(mean != nil)
+        #expect(abs(mean! - 0) < 1 || abs(mean! - 86_400) < 1)
+    }
+
+    /// The night label follows the user's calendar, not UTC.
+    @Test func csvNightDateUsesTheSuppliedCalendarNotUTC() {
+        var tokyo = Calendar(identifier: .gregorian)
+        tokyo.timeZone = TimeZone(identifier: "Asia/Tokyo")!
+
+        let morning = tokyo.date(from: DateComponents(year: 2026, month: 9, day: 19, hour: 8))!
+        let night = tokyo.startOfDay(for: morning)
+        let session = SleepSession(
+            nightDate: night,
+            stages: [
+                SleepStage(
+                    startDate: morning.addingTimeInterval(-8 * 3600),
+                    endDate: morning,
+                    type: .core
+                )
+            ]
+        )
+
+        let file = CSVExporter.trendsFile(
+            sessions: [session],
+            dailyCalories: [],
+            dailyRestingHR: [],
+            dailyHRV: [],
+            sleepHeartRates: [:],
+            calendar: tokyo
+        )
+
+        #expect(file.content.contains("2026-09-19"))
+        #expect(!file.content.contains("2026-09-18,"))
+    }
+
     private func date(_ value: String) -> Date {
         let formatter = DateFormatter()
         formatter.calendar = calendar

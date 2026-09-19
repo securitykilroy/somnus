@@ -13,6 +13,7 @@ struct MealEntrySheet: View {
     @State private var timestamp = Date()
     @State private var adjustingTime = false
     @FocusState private var noteFocused: Bool
+    @State private var saveFailed = false
 
     var body: some View {
         NavigationStack {
@@ -26,7 +27,10 @@ struct MealEntrySheet: View {
 
                 Section {
                     if adjustingTime {
-                        DatePicker("Time", selection: $timestamp)
+                        // Bounded to the past: a meal cannot have been
+                        // eaten later than now, and a future timestamp
+                        // made the card read "Last meal -1m ago".
+                        DatePicker("Time", selection: $timestamp, in: ...Date())
                     } else {
                         // Collapsed by default: the time is right the vast
                         // majority of the time, and an expanded picker would
@@ -52,12 +56,23 @@ struct MealEntrySheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        mealStore.add(note: note, at: timestamp)
-                        dismiss()
+                        // The widget's intents raise an error when the shared
+                        // container is unreachable; this used to dismiss as if
+                        // it had saved, losing what was typed.
+                        if mealStore.add(note: note, at: timestamp) {
+                            dismiss()
+                        } else {
+                            saveFailed = true
+                        }
                     }
                 }
             }
             .onAppear { noteFocused = true }
+            .alert("Could not save", isPresented: $saveFailed) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("Somnus could not reach its shared storage. Your entry is still here — try again in a moment.")
+            }
         }
     }
 }

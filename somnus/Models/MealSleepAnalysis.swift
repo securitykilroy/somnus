@@ -1,7 +1,7 @@
 import Foundation
 
 /// One night paired with the last thing eaten before falling asleep.
-struct MealSleepRecord: Identifiable, Hashable {
+nonisolated struct MealSleepRecord: Identifiable, Hashable {
     let sessionID: UUID
     let nightDate: Date
     let lastMealTime: Date
@@ -25,7 +25,7 @@ struct MealSleepRecord: Identifiable, Hashable {
 /// A mean-vs-mean split rather than only a correlation coefficient: with a few
 /// weeks of entries the sample is too small for r to say much, but "your six
 /// late-meal nights averaged 4% lower efficiency" is still readable.
-struct MealSleepSummary {
+nonisolated struct MealSleepSummary {
     let lateNights: [MealSleepRecord]
     let earlyNights: [MealSleepRecord]
     let threshold: TimeInterval
@@ -60,7 +60,7 @@ struct MealSleepSummary {
     }
 }
 
-enum MealSleepAnalyzer {
+nonisolated enum MealSleepAnalyzer {
     /// Beyond this, the "last meal" is almost certainly the previous day's
     /// dinner rather than anything to do with tonight — an unlogged day would
     /// otherwise produce a 30-hour gap and drag every regression with it.
@@ -112,7 +112,7 @@ enum MealSleepAnalyzer {
     }
 }
 
-extension MealSleepAnalyzer {
+nonisolated extension MealSleepAnalyzer {
     /// Everything eaten "for" a given night: from the start of the previous
     /// calendar day up to the moment sleep began.
     ///

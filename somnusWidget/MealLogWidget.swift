@@ -6,13 +6,28 @@ struct MealEntry: TimelineEntry {
     let date: Date
     /// Today's entries, newest first.
     let todaysMeals: [MealEvent]
-    /// The newest entry regardless of day, so the widget can still say "14h ago"
+    /// The newest entry by meal *time*, so the widget can still say "14h ago"
     /// first thing in the morning.
     let lastMeal: MealEvent?
+    /// The newest entry by *creation* time, which is a different entry whenever
+    /// something was backdated — and is the one `UndoLastMealIntent` removes.
+    ///
+    /// The undo button used to be gated on `lastMeal.createdAt`. Log a meal at
+    /// 21:00, then backdate a forgotten lunch to 13:00 two minutes later, and
+    /// the widget offered undo because the *displayed* 21:00 entry was recent
+    /// while the intent went and deleted the lunch instead — with no visible
+    /// change, since the 21:00 entry was still what the widget showed.
+    let mostRecentlyLogged: MealEvent?
 
     var canUndo: Bool {
-        guard let lastMeal else { return false }
-        return date.timeIntervalSince(lastMeal.createdAt) <= 15 * 60
+        undoExpiry.map { date < $0 } ?? false
+    }
+
+    /// When the undo button stops being offered, so the timeline can schedule
+    /// an entry for that moment instead of leaving a dead button on screen
+    /// until the next hourly refresh.
+    var undoExpiry: Date? {
+        mostRecentlyLogged?.createdAt.addingTimeInterval(MealLogStore.undoWindow)
     }
 }
 
@@ -29,12 +44,21 @@ struct MealProvider: TimelineProvider {
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<MealEntry>) -> Void) {
-        // Every intent reloads this widget the moment it writes, so the schedule
-        // is only a fallback. It exists to roll the "today" list over at
-        // midnight when nothing has been logged for a while.
-        let next = Calendar.current.date(byAdding: .hour, value: 1, to: .now)
-            ?? Date.now.addingTimeInterval(3600)
-        completion(Timeline(entries: [entry()], policy: .after(next)))
+        // Every intent reloads this widget the moment it writes, so the
+        // schedule is only a fallback — it exists to roll the "today" list over
+        // at midnight. It used to ask for an hourly refresh, which spent around
+        // 24 of the day's refresh budget re-rendering an unchanged widget; the
+        // two moments that actually change what is on screen are the undo
+        // button expiring and midnight.
+        let now = Date.now
+        let current = entry(now: now)
+        var entries = [current]
+
+        if let undoExpiry = current.undoExpiry, undoExpiry > now {
+            entries.append(entry(now: undoExpiry))
+        }
+
+        completion(Timeline(entries: entries, policy: .after(Self.nextMidnight(after: now))))
     }
 
     private func entry(now: Date = .now) -> MealEntry {
@@ -42,8 +66,18 @@ struct MealProvider: TimelineProvider {
         return MealEntry(
             date: now,
             todaysMeals: all.filter { Calendar.current.isDate($0.timestamp, inSameDayAs: now) },
-            lastMeal: all.first
+            lastMeal: all.first,
+            mostRecentlyLogged: all.max { $0.createdAt < $1.createdAt }
         )
+    }
+
+    private static func nextMidnight(after date: Date) -> Date {
+        let calendar = Calendar.current
+        return calendar.nextDate(
+            after: date,
+            matching: DateComponents(hour: 0, minute: 0, second: 0),
+            matchingPolicy: .nextTime
+        ) ?? date.addingTimeInterval(3600)
     }
 }
 
@@ -211,7 +245,12 @@ extension MealEntry {
             MealEvent(timestamp: now.addingTimeInterval(-7 * 3600), note: "Turkey sandwich"),
             MealEvent(timestamp: now.addingTimeInterval(-11 * 3600), note: "Oatmeal"),
         ]
-        return MealEntry(date: now, todaysMeals: meals, lastMeal: meals.first)
+        return MealEntry(
+            date: now,
+            todaysMeals: meals,
+            lastMeal: meals.first,
+            mostRecentlyLogged: meals.first
+        )
     }
 }
 
@@ -230,5 +269,5 @@ extension MealEntry {
 #Preview("Empty", as: .systemMedium) {
     MealLogWidget()
 } timeline: {
-    MealEntry(date: .now, todaysMeals: [], lastMeal: nil)
+    MealEntry(date: .now, todaysMeals: [], lastMeal: nil, mostRecentlyLogged: nil)
 }

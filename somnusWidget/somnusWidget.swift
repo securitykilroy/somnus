@@ -23,12 +23,19 @@ struct Provider: TimelineProvider {
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<SleepEntry>) -> Void) {
-        let entry = SleepEntry(date: .now, snapshot: snapshots.read())
+        let now = Date.now
+        let entry = SleepEntry(date: now, snapshot: snapshots.read())
         // The app pushes a reload the moment new sleep data lands, so this is
         // only a fallback — it exists to keep the "2d" staleness marker honest
-        // on days the app never runs.
-        let next = Calendar.current.date(byAdding: .hour, value: 1, to: .now)
-            ?? Date.now.addingTimeInterval(3600)
+        // on days the app never runs. That marker is counted in days, so it
+        // only changes at midnight; refreshing hourly spent roughly 24 of the
+        // day's refresh budget re-rendering something identical.
+        let calendar = Calendar.current
+        let next = calendar.nextDate(
+            after: now,
+            matching: DateComponents(hour: 0, minute: 0, second: 0),
+            matchingPolicy: .nextTime
+        ) ?? now.addingTimeInterval(3600)
         completion(Timeline(entries: [entry], policy: .after(next)))
     }
 }

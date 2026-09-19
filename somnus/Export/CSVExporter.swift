@@ -1,6 +1,6 @@
 import Foundation
 
-struct CSVExportFile {
+nonisolated struct CSVExportFile {
     let filename: String
     let content: String
 
@@ -9,12 +9,15 @@ struct CSVExportFile {
             .appendingPathComponent("SomnusExports", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let url = directory.appendingPathComponent(filename)
-        try content.data(using: .utf8)?.write(to: url, options: .atomic)
+        // `Data(_:)` over the UTF-8 view rather than `data(using:)`, whose
+        // optional result was being discarded — a nil would have returned a URL
+        // to a file that was never written.
+        try Data(content.utf8).write(to: url, options: .atomic)
         return url
     }
 }
 
-enum CSVExporter {
+nonisolated enum CSVExporter {
     static func trendsFile(
         sessions: [SleepSession],
         dailyCalories: [DailyMetricSample],
@@ -321,7 +324,7 @@ enum CSVExporter {
     }
 
     private static func escape(_ value: String) -> String {
-        if value.contains(",") || value.contains("\"") || value.contains("\n") {
+        if value.contains(",") || value.contains("\"") || value.contains("\n") || value.contains("\r") {
             return "\"\(value.replacingOccurrences(of: "\"", with: "\"\""))\""
         }
         return value
@@ -331,16 +334,23 @@ enum CSVExporter {
         isoFormatter.string(from: date)
     }
 
+    /// Rendered in the caller's calendar, not UTC.
+    ///
+    /// `nightDate` is a local `startOfDay`, so reading its components in GMT
+    /// moved the label back a day for everyone at or east of Greenwich — a
+    /// night logged as 2026-09-19 in Berlin or Tokyo exported as 2026-09-18,
+    /// in the `night_date` column and in the filename. The export tests all
+    /// pin their calendar to UTC, which is why the suite never saw it.
     private static func dateOnly(_ date: Date, calendar: Calendar) -> String {
-        var calendar = calendar
-        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
         let components = calendar.dateComponents([.year, .month, .day], from: date)
         return String(format: "%04d-%02d-%02d", components.year ?? 0, components.month ?? 0, components.day ?? 0)
     }
 
     private static func number(_ value: Double) -> String {
         if value.isNaN || value.isInfinite { return "" }
-        if value.rounded() == value {
+        // `Int(_:)` traps outside its range, so a nonsense value from Health
+        // would crash the export rather than produce a bad cell.
+        if value.rounded() == value, value.magnitude < 9e15 {
             return String(Int(value))
         }
         return String(format: "%.3f", value)

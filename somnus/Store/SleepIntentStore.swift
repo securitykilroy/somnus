@@ -107,35 +107,94 @@ final class SleepIntentStore {
         try load()
     }
 
+    /// Brings the stored snapshots in line with `records`, touching only what
+    /// actually changed.
+    ///
+    /// This used to delete every row and insert up to 90 fresh ones with new
+    /// UUIDs. It is called from `onChange(of: store.lastLoadedAt)`, so it ran
+    /// on every foreground refresh and every HealthKit observer fire — up to
+    /// 180 CloudKit record mutations each time, for data that is usually
+    /// identical to what was already there, which the Watch then had to
+    /// re-sync.
+    ///
+    /// An empty `records` is treated as "nothing to say" rather than "delete
+    /// everything": it most often means the intent store has not finished
+    /// loading, and wiping here would take the Watch complication's only data
+    /// source with it.
     func saveLatencySnapshots(from records: [SleepLatencyRecord], limit: Int = 90) throws {
-        let existingRequest = NSFetchRequest<NSManagedObject>(entityName: Self.latencySnapshotEntityName)
-        let existingSnapshots = try context.fetch(existingRequest)
-        for snapshot in existingSnapshots {
-            context.delete(snapshot)
-        }
+        guard !records.isEmpty else { return }
 
-        let now = Date()
-        let snapshotRecords = records
+        let wanted = records
             .sorted { $0.nightDate > $1.nightDate }
             .prefix(limit)
+        let wantedByNight = Dictionary(wanted.map { ($0.nightDate, $0) }, uniquingKeysWith: { first, _ in first })
 
-        for record in snapshotRecords {
+        let existingRequest = NSFetchRequest<NSManagedObject>(entityName: Self.latencySnapshotEntityName)
+        let existing = try context.fetch(existingRequest)
+
+        let now = Date()
+        var seenNights: Set<Date> = []
+        var didChange = false
+
+        for object in existing {
+            guard let nightDate = object.value(forKey: "nightDate") as? Date,
+                  let record = wantedByNight[nightDate],
+                  seenNights.insert(nightDate).inserted else {
+                context.delete(object)
+                didChange = true
+                continue
+            }
+
+            if apply(record, to: object, at: now) {
+                didChange = true
+            }
+        }
+
+        for record in wanted where !seenNights.contains(record.nightDate) {
             let object = NSManagedObject(
                 entity: Self.entityDescription(named: Self.latencySnapshotEntityName, in: context),
                 insertInto: context
             )
             object.setValue(UUID(), forKey: "id")
             object.setValue(record.nightDate, forKey: "nightDate")
-            object.setValue(record.intentTime, forKey: "intentTime")
-            object.setValue(record.firstSleepTime, forKey: "firstSleepTime")
-            object.setValue(record.latency, forKey: "latency")
-            object.setValue(record.appleLatency, forKey: "appleLatency")
             object.setValue(now, forKey: "createdAt")
-            object.setValue(now, forKey: "updatedAt")
+            _ = apply(record, to: object, at: now)
+            didChange = true
         }
+
+        guard didChange else { return }
 
         try context.save()
         try load()
+    }
+
+    /// Writes the record's values onto the managed object, reporting whether
+    /// anything actually differed. Returning `false` is what keeps an unchanged
+    /// night from being re-sent to CloudKit.
+    private func apply(_ record: SleepLatencyRecord, to object: NSManagedObject, at now: Date) -> Bool {
+        var changed = false
+
+        if object.value(forKey: "intentTime") as? Date != record.intentTime {
+            object.setValue(record.intentTime, forKey: "intentTime")
+            changed = true
+        }
+        if object.value(forKey: "firstSleepTime") as? Date != record.firstSleepTime {
+            object.setValue(record.firstSleepTime, forKey: "firstSleepTime")
+            changed = true
+        }
+        if object.value(forKey: "latency") as? TimeInterval != record.latency {
+            object.setValue(record.latency, forKey: "latency")
+            changed = true
+        }
+        if object.value(forKey: "appleLatency") as? TimeInterval != record.appleLatency {
+            object.setValue(record.appleLatency, forKey: "appleLatency")
+            changed = true
+        }
+
+        if changed {
+            object.setValue(now, forKey: "updatedAt")
+        }
+        return changed
     }
 
     private func fetchEvents() throws -> [SleepIntentEvent] {

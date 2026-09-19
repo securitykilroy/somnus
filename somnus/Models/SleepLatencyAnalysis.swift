@@ -92,22 +92,34 @@ enum SleepLatencyAnalyzer {
             .filter { $0.kind == .tryingToSleep }
             .sorted { $0.timestamp < $1.timestamp }
 
-        return sessions.compactMap { session in
+        // Oldest night first, and each intent tap is consumed once. A tap
+        // belongs to exactly one night; without this, two sessions whose onsets
+        // fall within `maximumLatency` of the same tap — a nap and the night
+        // that followed it — both claimed it and both reported a latency from
+        // it.
+        var claimedEventIDs: Set<UUID> = []
+
+        return sessions.sorted { $0.nightDate < $1.nightDate }.compactMap { session in
             guard let firstSleep = session.normalizedTimeline.firstSleepStart else {
                 return nil
             }
 
+            // The window is the whole rule. There used to be a same-calendar-day
+            // test here too, `|| latency <= maximumLatency` — but the guard
+            // above already guarantees that, so the day test never applied. It
+            // could not have: `nightDate` is the morning you woke, while the
+            // tap happens the evening before, so requiring the two to share a
+            // calendar day would have rejected every ordinary bedtime.
             let matchingEvent = tryingEvents
                 .filter { event in
+                    guard !claimedEventIDs.contains(event.id) else { return false }
                     guard event.timestamp <= firstSleep else { return false }
-                    let latency = firstSleep.timeIntervalSince(event.timestamp)
-                    guard (0...maximumLatency).contains(latency) else { return false }
-                    return calendar.isDate(event.timestamp, inSameDayAs: session.nightDate)
-                        || latency <= maximumLatency
+                    return (0...maximumLatency).contains(firstSleep.timeIntervalSince(event.timestamp))
                 }
                 .max { $0.timestamp < $1.timestamp }
 
             guard let matchingEvent else { return nil }
+            claimedEventIDs.insert(matchingEvent.id)
             let latency = firstSleep.timeIntervalSince(matchingEvent.timestamp)
 
             return SleepLatencyRecord(

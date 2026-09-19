@@ -29,16 +29,32 @@ nonisolated struct MealLogStore {
         directory?.appendingPathComponent(Self.filename)
     }
 
-    /// Every entry, newest first.
-    func read() -> [MealEvent] {
-        guard let fileURL else { return [] }
+    /// How long after logging an entry it can still be undone. Shared so the
+    /// widget's undo button and `removeMostRecent` cannot disagree about it.
+    public static let undoWindow: TimeInterval = 15 * 60
 
-        var events: [MealEvent] = []
+    /// Every entry, newest first, or `nil` when the log could not be read.
+    ///
+    /// The `nil` matters: a coordination failure used to be reported as an
+    /// empty array, indistinguishable from "nothing logged yet", and since the
+    /// app re-reads on every activation a transient failure blanked the meal
+    /// list and the widget's Today column.
+    func readOrFail() -> [MealEvent]? {
+        guard let fileURL else { return nil }
+
+        var events: [MealEvent]?
         var coordinatorError: NSError?
         NSFileCoordinator().coordinate(readingItemAt: fileURL, options: [], error: &coordinatorError) { url in
             events = Self.decode(at: url)
         }
+        guard coordinatorError == nil else { return nil }
         return events
+    }
+
+    /// Every entry, newest first. An unreadable log reads as empty; callers
+    /// that can do something better with the distinction use `readOrFail`.
+    func read() -> [MealEvent] {
+        readOrFail() ?? []
     }
 
     /// Entries falling inside the calendar day containing `date`, newest first.
@@ -48,6 +64,7 @@ nonisolated struct MealLogStore {
 
     @discardableResult
     func append(note: String = "", at timestamp: Date = Date()) -> MealEvent? {
+        // `MealEvent.init` trims, matching `update(id:note:)`.
         let event = MealEvent(timestamp: timestamp, note: note)
         let saved = mutate { events in
             events.append(event)
@@ -89,7 +106,7 @@ nonisolated struct MealLogStore {
     /// undid. Bounded by `within` because "undo" is meant for a mis-tap seconds
     /// old, not for pruning last week.
     @discardableResult
-    func removeMostRecent(within: TimeInterval = 15 * 60, now: Date = Date()) -> MealEvent? {
+    func removeMostRecent(within: TimeInterval = MealLogStore.undoWindow, now: Date = Date()) -> MealEvent? {
         var removed: MealEvent?
         let saved = mutate { events in
             guard let index = events.indices.max(by: { events[$0].createdAt < events[$1].createdAt }),

@@ -114,26 +114,55 @@ final class HealthKitManager: @unchecked Sendable {
         return Self.groupIntoSessions(categorySamples, movementSamples: [])
     }
 
+    /// How many nights are enriched at once. The loop used to be fully serial,
+    /// which on a three-year history meant well over two thousand HealthKit
+    /// round trips one after another; unbounded concurrency is no better, since
+    /// HealthKit serialises internally and the queue just grows.
+    private static let enrichmentConcurrency = 8
+
+    /// Sleep windows per heart-rate query.
+    private static let heartRateWindowChunkSize = 60
+
     func enrichSessionsWithMovement(_ sessions: [SleepSession]) async throws -> [SleepSession] {
-        var enriched: [SleepSession] = []
-        enriched.reserveCapacity(sessions.count)
+        guard !sessions.isEmpty else { return [] }
 
-        for session in sessions {
-            async let movementSamples = fetchMovementSamples(
-                in: AwakeEventDetector.sleepMovementEvidenceWindow(for: session)
-            )
-            async let standSamples = fetchStandHourSamples(
-                in: AwakeEventDetector.standEvidenceWindow(for: session)
-            )
-            enriched.append(
-                SleepSession(
-                    copying: session,
-                    movementSamples: try await movementSamples + standSamples
-                )
-            )
+        return try await withThrowingTaskGroup(of: (Int, SleepSession).self) { group in
+            var enriched = sessions
+            var nextIndex = 0
+            var inFlight = 0
+
+            func addTask(for index: Int) {
+                let session = sessions[index]
+                group.addTask { [self] in
+                    async let movementSamples = fetchMovementSamples(
+                        in: AwakeEventDetector.sleepMovementEvidenceWindow(for: session)
+                    )
+                    async let standSamples = fetchStandHourSamples(
+                        in: AwakeEventDetector.standEvidenceWindow(for: session)
+                    )
+                    let samples = try await movementSamples + standSamples
+                    return (index, SleepSession(copying: session, movementSamples: samples))
+                }
+            }
+
+            while nextIndex < sessions.count, inFlight < Self.enrichmentConcurrency {
+                addTask(for: nextIndex)
+                nextIndex += 1
+                inFlight += 1
+            }
+
+            while let (index, session) = try await group.next() {
+                enriched[index] = session
+                inFlight -= 1
+                if nextIndex < sessions.count {
+                    addTask(for: nextIndex)
+                    nextIndex += 1
+                    inFlight += 1
+                }
+            }
+
+            return enriched
         }
-
-        return enriched
     }
 
     private func fetchMovementSamples(in window: DateInterval?) async throws -> [MovementSample] {
@@ -414,33 +443,47 @@ final class HealthKitManager: @unchecked Sendable {
         let windows = sessions
             .map { SessionWindow(nightDate: $0.nightDate, start: $0.startTime, end: $0.endTime) }
             .sorted { $0.start < $1.start }
-        let start = windows.map(\.start).min()!
-        let end = windows.map(\.end).max()!
         let hrType = HKQuantityType.quantityType(forIdentifier: .heartRate)!
-        let predicate = HKQuery.predicateForSamples(withStart: start, end: end)
-        let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
         let unit = HKUnit.count().unitDivided(by: .minute())
 
-        let raw: [HKSample] = try await withCheckedThrowingContinuation { continuation in
-            let query = HKSampleQuery(
-                sampleType: hrType,
-                predicate: predicate,
-                limit: HKObjectQueryNoLimit,
-                sortDescriptors: [sort]
-            ) { _, result, error in
-                if let error { continuation.resume(throwing: error) }
-                else { continuation.resume(returning: result ?? []) }
-            }
-            store.execute(query)
+        // One OR of the sleep windows rather than a single predicate spanning
+        // the earliest start to the latest end. The wide version pulled every
+        // heart-rate sample the person had — three years of daytime and
+        // workout readings, hundreds of thousands of samples — and then threw
+        // nearly all of them away in memory. Chunked so no single predicate
+        // grows to a thousand subpredicates.
+        let chunks = stride(from: 0, to: windows.count, by: Self.heartRateWindowChunkSize).map { offset in
+            Array(windows[offset..<min(offset + Self.heartRateWindowChunkSize, windows.count)])
         }
 
-        let hrSamples = raw.compactMap { sample -> TimedQuantitySample? in
-            guard let sample = sample as? HKQuantitySample else { return nil }
-            return TimedQuantitySample(
-                startDate: sample.startDate,
-                value: sample.quantity.doubleValue(for: unit)
-            )
+        var hrSamples: [TimedQuantitySample] = []
+        for chunk in chunks {
+            let predicate = NSCompoundPredicate(orPredicateWithSubpredicates: chunk.map {
+                HKQuery.predicateForSamples(withStart: $0.start, end: $0.end)
+            })
+
+            let raw: [HKSample] = try await withCheckedThrowingContinuation { continuation in
+                let query = HKSampleQuery(
+                    sampleType: hrType,
+                    predicate: predicate,
+                    limit: HKObjectQueryNoLimit,
+                    sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)]
+                ) { _, result, error in
+                    if let error { continuation.resume(throwing: error) }
+                    else { continuation.resume(returning: result ?? []) }
+                }
+                store.execute(query)
+            }
+
+            hrSamples.append(contentsOf: raw.compactMap { sample -> TimedQuantitySample? in
+                guard let sample = sample as? HKQuantitySample else { return nil }
+                return TimedQuantitySample(
+                    startDate: sample.startDate,
+                    value: sample.quantity.doubleValue(for: unit)
+                )
+            })
         }
+
         return Self.averageSamplesBySession(samples: hrSamples, windows: windows)
     }
 
@@ -474,6 +517,11 @@ final class HealthKitManager: @unchecked Sendable {
                 sampleIndex += 1
             }
 
+            // The cursor tracks `window.start` only, which is monotonic across
+            // the sorted windows. It used to be advanced to the end of each
+            // window's scan as well, so two overlapping windows — a nap and the
+            // night around it — had the second one start after the first one's
+            // samples and silently miss them.
             var scanIndex = sampleIndex
             var total = 0.0
             var count = 0
@@ -482,7 +530,6 @@ final class HealthKitManager: @unchecked Sendable {
                 count += 1
                 scanIndex += 1
             }
-            sampleIndex = scanIndex
 
             if count > 0 {
                 result[window.nightDate] = total / Double(count)

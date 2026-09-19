@@ -1,6 +1,6 @@
 import Foundation
 
-struct SleepTimelineSegment: Identifiable {
+nonisolated struct SleepTimelineSegment: Identifiable {
     let id = UUID()
     let startDate: Date
     let endDate: Date
@@ -11,31 +11,58 @@ struct SleepTimelineSegment: Identifiable {
     var duration: TimeInterval { endDate.timeIntervalSince(startDate) }
 }
 
-struct NormalizedSleepTimeline {
+nonisolated struct NormalizedSleepTimeline {
     let rawStages: [SleepStage]
     let segments: [SleepTimelineSegment]
     let totalOverlap: TimeInterval
     let totalGap: TimeInterval
     let conflictingSegmentCount: Int
 
+    /// Summed once at construction rather than on every read: `duration(for:)`
+    /// used to filter the whole segment list, and it is read per stage type per
+    /// night inside chart loops.
+    private let durationsByType: [SleepStageType: TimeInterval]
+    let sleepDuration: TimeInterval
+    let firstSleepStart: Date?
+    let lastSleepEnd: Date?
+
+    init(
+        rawStages: [SleepStage],
+        segments: [SleepTimelineSegment],
+        totalOverlap: TimeInterval,
+        totalGap: TimeInterval,
+        conflictingSegmentCount: Int
+    ) {
+        self.rawStages = rawStages
+        self.segments = segments
+        self.totalOverlap = totalOverlap
+        self.totalGap = totalGap
+        self.conflictingSegmentCount = conflictingSegmentCount
+
+        var durations: [SleepStageType: TimeInterval] = [:]
+        var sleep: TimeInterval = 0
+        var firstSleep: Date?
+        var lastSleep: Date?
+        for segment in segments {
+            durations[segment.type, default: 0] += segment.duration
+            if segment.type.isSleep {
+                sleep += segment.duration
+                if firstSleep == nil { firstSleep = segment.startDate }
+                lastSleep = segment.endDate
+            }
+        }
+        self.durationsByType = durations
+        self.sleepDuration = sleep
+        self.firstSleepStart = firstSleep
+        self.lastSleepEnd = lastSleep
+    }
+
     func duration(for type: SleepStageType) -> TimeInterval {
-        segments.filter { $0.type == type }.reduce(0) { $0 + $1.duration }
-    }
-
-    var sleepDuration: TimeInterval {
-        segments.filter(\.type.isSleep).reduce(0) { $0 + $1.duration }
-    }
-
-    var firstSleepStart: Date? {
-        segments.first(where: { $0.type.isSleep })?.startDate
-    }
-
-    var lastSleepEnd: Date? {
-        segments.last(where: { $0.type.isSleep })?.endDate
+        durationsByType[type] ?? 0
     }
 }
 
-enum SleepTimelineNormalizer {
+nonisolated enum SleepTimelineNormalizer {
     static func normalize(_ stages: [SleepStage]) -> NormalizedSleepTimeline {
         let validStages = stages
             .filter { $0.endDate > $0.startDate }
@@ -71,12 +98,25 @@ enum SleepTimelineNormalizer {
         var totalGap: TimeInterval = 0
         var conflictingSegmentCount = 0
 
+        // Swept rather than re-filtered. The old loop ran
+        // `validStages.filter` once per boundary, which is O(stages²) per
+        // night and, across a three-year history, the bulk of a load. Because
+        // `validStages` is sorted by start date, the stages overlapping each
+        // boundary interval can be maintained incrementally.
+        var active: [SleepStage] = []
+        var nextStageIndex = 0
+
         for index in 0..<(boundaries.count - 1) {
             let start = boundaries[index]
             let end = boundaries[index + 1]
             guard end > start else { continue }
 
-            let active = validStages.filter { $0.startDate < end && $0.endDate > start }
+            while nextStageIndex < validStages.count, validStages[nextStageIndex].startDate < end {
+                active.append(validStages[nextStageIndex])
+                nextStageIndex += 1
+            }
+            active.removeAll { $0.endDate <= start }
+
             guard !active.isEmpty else {
                 totalGap += end.timeIntervalSince(start)
                 continue
@@ -115,4 +155,5 @@ enum SleepTimelineNormalizer {
             conflictingSegmentCount: conflictingSegmentCount
         )
     }
+
 }

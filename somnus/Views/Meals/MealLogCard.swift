@@ -116,7 +116,7 @@ struct MealEditSheet: View {
                         .lineLimit(1...4)
                 }
                 Section("When") {
-                    DatePicker("Time", selection: $timestamp)
+                    DatePicker("Time", selection: $timestamp, in: ...Date())
                 }
                 Section {
                     Button("Delete Entry", role: .destructive) {

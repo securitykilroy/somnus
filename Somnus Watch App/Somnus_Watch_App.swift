@@ -20,14 +20,14 @@ struct SleepLatencyProvider: TimelineProvider {
 
     func getSnapshot(in context: Context, completion: @escaping (SleepLatencyEntry) -> Void) {
         Task {
-            let snapshot = await WidgetSomnusStore().latestLatencySnapshot()
+            let snapshot = await WidgetSomnusStore.shared.latestLatencySnapshot()
             completion(SleepLatencyEntry(date: Date(), snapshot: snapshot))
         }
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<SleepLatencyEntry>) -> Void) {
         Task {
-            let snapshot = await WidgetSomnusStore().latestLatencySnapshot()
+            let snapshot = await WidgetSomnusStore.shared.latestLatencySnapshot()
             let entry = SleepLatencyEntry(date: Date(), snapshot: snapshot)
             let nextRefresh = Calendar.current.date(byAdding: .minute, value: 30, to: Date()) ?? Date()
             completion(Timeline(entries: [entry], policy: .after(nextRefresh)))

@@ -1,6 +1,6 @@
 import Foundation
 
-struct SleepSession: Identifiable {
+nonisolated struct SleepSession: Identifiable {
     let id: UUID
     let nightDate: Date
     let stages: [SleepStage]
@@ -8,19 +8,49 @@ struct SleepSession: Identifiable {
     let normalizedTimeline: NormalizedSleepTimeline
     let startTime: Date
     let endTime: Date
+    let timeInBed: TimeInterval
+
+    /// Detected once here rather than on each read. Every one of the
+    /// out-of-bed readouts used to re-run the detector, and the trend charts
+    /// read several of them per night inside a `ForEach` that SwiftUI
+    /// re-evaluates on every layout pass.
+    let awakeEvents: [AwakeEvent]
+
+    /// Single-pass walks of the timeline, likewise hoisted out of the
+    /// per-render path.
+    let wakeAfterSleepOnset: TimeInterval
+    let awakeningCount: Int
+    let transitionCount: Int
+    let longestSleepBlock: TimeInterval
 
     init(nightDate: Date, stages: [SleepStage], movementSamples: [MovementSample] = []) {
-        self.id = UUID()
+        let timeline = SleepTimelineNormalizer.normalize(stages)
+        let start = stages.min(by: { $0.startDate < $1.startDate })?.startDate ?? nightDate
+        let end = stages.max(by: { $0.endDate < $1.endDate })?.endDate ?? nightDate
+
+        self.id = Self.identifier(forNight: nightDate)
         self.nightDate = nightDate
         self.stages = stages
         self.movementSamples = movementSamples
-        self.normalizedTimeline = SleepTimelineNormalizer.normalize(stages)
-        self.startTime = stages.min(by: { $0.startDate < $1.startDate })?.startDate ?? nightDate
-        self.endTime = stages.max(by: { $0.endDate < $1.endDate })?.endDate ?? nightDate
+        self.normalizedTimeline = timeline
+        self.startTime = start
+        self.endTime = end
+        self.timeInBed = stages.isEmpty ? 0 : end.timeIntervalSince(start)
+        self.awakeEvents = AwakeEventDetector.events(
+            timeline: timeline,
+            movementSamples: movementSamples
+        )
+
+        let derived = Self.timelineMetrics(timeline)
+        self.wakeAfterSleepOnset = derived.wakeAfterSleepOnset
+        self.awakeningCount = derived.awakeningCount
+        self.transitionCount = derived.transitionCount
+        self.longestSleepBlock = derived.longestSleepBlock
     }
 
-    /// Copies a session with new movement samples, reusing the already-computed timeline
-    /// to avoid re-running the O(n²) normalizer when only movement evidence changes.
+    /// Copies a session with new movement samples, reusing the already-computed
+    /// timeline and its derived metrics — only the awake events depend on
+    /// movement evidence, so only they are recomputed.
     init(copying original: SleepSession, movementSamples: [MovementSample]) {
         self.id = original.id
         self.nightDate = original.nightDate
@@ -29,6 +59,86 @@ struct SleepSession: Identifiable {
         self.normalizedTimeline = original.normalizedTimeline
         self.startTime = original.startTime
         self.endTime = original.endTime
+        self.timeInBed = original.timeInBed
+        self.awakeEvents = AwakeEventDetector.events(
+            timeline: original.normalizedTimeline,
+            movementSamples: movementSamples
+        )
+        self.wakeAfterSleepOnset = original.wakeAfterSleepOnset
+        self.awakeningCount = original.awakeningCount
+        self.transitionCount = original.transitionCount
+        self.longestSleepBlock = original.longestSleepBlock
+    }
+
+    /// Derived from the night rather than random.
+    ///
+    /// A fresh `UUID()` per initialisation meant every reload handed SwiftUI a
+    /// completely new set of identities, so `ForEach` tore down and rebuilt
+    /// every row and chart mark even when nothing about the night had changed.
+    private static func identifier(forNight nightDate: Date) -> UUID {
+        let day = Int64((nightDate.timeIntervalSince1970 / 86_400).rounded(.down))
+        let suffix = String(format: "%012llx", UInt64(bitPattern: day) & 0xFFFF_FFFF_FFFF)
+        return UUID(uuidString: "506d6e75-0000-4000-8000-\(suffix)") ?? UUID()
+    }
+
+    private static func timelineMetrics(
+        _ timeline: NormalizedSleepTimeline
+    ) -> (
+        wakeAfterSleepOnset: TimeInterval,
+        awakeningCount: Int,
+        transitionCount: Int,
+        longestSleepBlock: TimeInterval
+    ) {
+        var waso: TimeInterval = 0
+        var awakenings = 0
+        var transitions = 0
+        var longest: TimeInterval = 0
+        var current: TimeInterval = 0
+        var previousType: SleepStageType?
+        /// End of the awake segment just counted, so a run of touching awake
+        /// segments counts as one awakening.
+        var openAwakeEnd: Date?
+
+        let firstSleep = timeline.firstSleepStart
+        let lastSleep = timeline.lastSleepEnd
+
+        for segment in timeline.segments {
+            if let previousType, previousType != segment.type { transitions += 1 }
+            previousType = segment.type
+
+            if segment.type.isSleep {
+                current += segment.duration
+                longest = max(longest, current)
+            } else {
+                current = 0
+            }
+
+            guard segment.type == .awake else {
+                openAwakeEnd = nil
+                continue
+            }
+
+            guard let firstSleep, let lastSleep,
+                  segment.startDate >= firstSleep,
+                  segment.endDate <= lastSleep else {
+                openAwakeEnd = nil
+                continue
+            }
+
+            waso += segment.duration
+            // The timeline splits at every sample edge, so one continuous
+            // awakening arrives as several segments whenever the watch wrote it
+            // as consecutive samples, or an overlapping in-bed sample
+            // introduced an edge part-way through. Counting segments read one
+            // awakening as several; counting runs does not. Durations were
+            // never affected, only the count.
+            if openAwakeEnd != segment.startDate {
+                awakenings += 1
+            }
+            openAwakeEnd = segment.endDate
+        }
+
+        return (waso, awakenings, transitions, longest)
     }
 
     var totalSleep: TimeInterval {
@@ -53,12 +163,6 @@ struct SleepSession: Identifiable {
 
     var unspecifiedSleepDuration: TimeInterval {
         normalizedTimeline.duration(for: .asleepUnspecified)
-    }
-
-    var timeInBed: TimeInterval {
-        guard let start = stages.min(by: { $0.startDate < $1.startDate })?.startDate,
-              let end = stages.max(by: { $0.endDate < $1.endDate })?.endDate else { return 0 }
-        return end.timeIntervalSince(start)
     }
 
     var efficiency: Double {
@@ -92,36 +196,6 @@ struct SleepSession: Identifiable {
             let firstSleep = normalizedTimeline.firstSleepStart,
             firstSleep > bedStart else { return 0 }
         return firstSleep.timeIntervalSince(bedStart)
-    }
-
-    var wakeAfterSleepOnset: TimeInterval {
-        guard let firstSleep = normalizedTimeline.firstSleepStart,
-              let lastSleep = normalizedTimeline.lastSleepEnd else { return 0 }
-        return normalizedTimeline.segments
-            .filter { $0.type == .awake && $0.startDate >= firstSleep && $0.endDate <= lastSleep }
-            .reduce(0) { $0 + $1.duration }
-    }
-
-    var awakeningCount: Int {
-        guard let firstSleep = normalizedTimeline.firstSleepStart,
-              let lastSleep = normalizedTimeline.lastSleepEnd else { return 0 }
-        return normalizedTimeline.segments
-            .filter { $0.type == .awake && $0.startDate >= firstSleep && $0.endDate <= lastSleep }
-            .count
-    }
-
-    var longestSleepBlock: TimeInterval {
-        var longest: TimeInterval = 0
-        var current: TimeInterval = 0
-        for segment in normalizedTimeline.segments {
-            if segment.type.isSleep {
-                current += segment.duration
-                longest = max(longest, current)
-            } else {
-                current = 0
-            }
-        }
-        return longest
     }
 
     var remLatency: TimeInterval? {
@@ -159,10 +233,6 @@ struct SleepSession: Identifiable {
         SleepDataQuality(session: self, timeline: normalizedTimeline)
     }
 
-    var awakeEvents: [AwakeEvent] {
-        AwakeEventDetector.events(for: self)
-    }
-
     var movementConfirmedAwakeningCount: Int {
         awakeEvents.filter(\.isMovementConfirmed).count
     }
@@ -171,16 +241,6 @@ struct SleepSession: Identifiable {
         awakeEvents
             .filter(\.isMovementConfirmed)
             .reduce(0) { $0 + $1.duration }
-    }
-
-    var transitionCount: Int {
-        let stages = normalizedTimeline.segments
-        guard stages.count > 1 else { return 0 }
-        var count = 0
-        for i in 1..<stages.count {
-            if stages[i].type != stages[i - 1].type { count += 1 }
-        }
-        return count
     }
 
     func morningWakeAnalysis(cutoffHour: Int = 4, calendar: Calendar = .current) -> MorningWakeAnalysis {
@@ -235,7 +295,7 @@ struct SleepSession: Identifiable {
     }
 }
 
-struct MorningWakeAnalysis {
+nonisolated struct MorningWakeAnalysis {
     let cutoff: Date
     let firstWakeAfterCutoff: Date?
     let terminalWakeStart: Date?
@@ -252,7 +312,7 @@ struct MorningWakeAnalysis {
     }
 }
 
-struct SleepDataQuality {
+nonisolated struct SleepDataQuality {
     let rawSampleCount: Int
     let sourceCount: Int
     let overlapDuration: TimeInterval

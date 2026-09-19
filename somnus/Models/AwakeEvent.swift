@@ -1,6 +1,6 @@
 import Foundation
 
-struct MovementSample: Identifiable {
+nonisolated struct MovementSample: Identifiable {
     let startDate: Date
     let endDate: Date
     let stepCount: Double
@@ -36,13 +36,13 @@ struct MovementSample: Identifiable {
     }
 }
 
-enum AwakeEventClassification: String {
+nonisolated enum AwakeEventClassification: String {
     case restlessInBed = "Restless in Bed"
     case likelyOutOfBed = "Likely Out of Bed"
     case unknown = "Unknown"
 }
 
-struct AwakeEvent: Identifiable {
+nonisolated struct AwakeEvent: Identifiable {
     let startDate: Date
     let endDate: Date
     let duration: TimeInterval
@@ -68,17 +68,29 @@ struct AwakeEvent: Identifiable {
     }
 }
 
-enum AwakeEventDetector {
+nonisolated enum AwakeEventDetector {
     private static let outOfBedMergeGap: TimeInterval = 20 * 60
 
     static func events(for session: SleepSession) -> [AwakeEvent] {
-        let awakeSegments = movementEligibleAwakeSegments(for: session)
+        events(timeline: session.normalizedTimeline, movementSamples: session.movementSamples)
+    }
+
+    /// Takes the timeline and movement samples rather than a `SleepSession` so
+    /// that `SleepSession` can run this once during its own initialisation.
+    /// It used to be a computed property on the session, which meant every read
+    /// — and the out-of-bed count, the out-of-bed duration and the morning-wake
+    /// analysis each read it — re-ran the whole detection.
+    static func events(
+        timeline: NormalizedSleepTimeline,
+        movementSamples: [MovementSample]
+    ) -> [AwakeEvent] {
+        let awakeSegments = movementEligibleAwakeSegments(timeline: timeline)
         let evidenceWindows = movementEvidenceWindows(for: awakeSegments)
 
         let awakeEvents = zip(awakeSegments, evidenceWindows).map { segment, window in
             let evidence = movementEvidence(
                 in: window,
-                movementSamples: session.movementSamples
+                movementSamples: movementSamples
             )
             let classification = classify(
                 stepCount: evidence.steps,
@@ -102,39 +114,46 @@ enum AwakeEventDetector {
             )
         }
 
-        let events = (awakeEvents + inferredMovementEvents(for: session, excluding: evidenceWindows))
+        let inferred = inferredMovementEvents(
+            timeline: timeline,
+            movementSamples: movementSamples,
+            excluding: evidenceWindows
+        )
+        let events = (awakeEvents + inferred)
             .sorted { $0.startDate < $1.startDate }
 
-        return coalescedOutOfBedEvents(events)
+        return coalescedOutOfBedEvents(events, movementSamples: movementSamples)
     }
 
     static func movementEvidenceWindows(for session: SleepSession) -> [DateInterval] {
-        movementEvidenceWindows(for: movementEligibleAwakeSegments(for: session))
+        movementEvidenceWindows(for: movementEligibleAwakeSegments(timeline: session.normalizedTimeline))
     }
 
     static func standEvidenceWindow(for session: SleepSession) -> DateInterval? {
-        sleepWindow(for: session)
+        sleepWindow(timeline: session.normalizedTimeline)
     }
 
     static func sleepMovementEvidenceWindow(for session: SleepSession) -> DateInterval? {
-        sleepWindow(for: session)
+        sleepWindow(timeline: session.normalizedTimeline)
     }
 
-    private static func sleepWindow(for session: SleepSession) -> DateInterval? {
-        guard let firstSleep = session.normalizedTimeline.firstSleepStart,
-              let lastSleep = session.normalizedTimeline.lastSleepEnd,
+    private static func sleepWindow(timeline: NormalizedSleepTimeline) -> DateInterval? {
+        guard let firstSleep = timeline.firstSleepStart,
+              let lastSleep = timeline.lastSleepEnd,
               firstSleep < lastSleep else {
             return nil
         }
         return DateInterval(start: firstSleep, end: lastSleep)
     }
 
-    private static func movementEligibleAwakeSegments(for session: SleepSession) -> [SleepTimelineSegment] {
-        guard let sleepWindow = sleepWindow(for: session) else {
+    private static func movementEligibleAwakeSegments(
+        timeline: NormalizedSleepTimeline
+    ) -> [SleepTimelineSegment] {
+        guard let sleepWindow = sleepWindow(timeline: timeline) else {
             return []
         }
 
-        return session.normalizedTimeline.segments
+        return timeline.segments
             .filter { $0.type == .awake && $0.startDate >= sleepWindow.start && $0.endDate <= sleepWindow.end }
     }
 
@@ -162,13 +181,14 @@ enum AwakeEventDetector {
     }
 
     private static func inferredMovementEvents(
-        for session: SleepSession,
+        timeline: NormalizedSleepTimeline,
+        movementSamples: [MovementSample],
         excluding existingWindows: [DateInterval]
     ) -> [AwakeEvent] {
-        guard let sleepWindow = sleepWindow(for: session) else { return [] }
+        guard let sleepWindow = sleepWindow(timeline: timeline) else { return [] }
 
         let movementClusters = clusteredMovementSamples(
-            session.movementSamples.filter { sample in
+            movementSamples.filter { sample in
                 let window = sampleWindow(sample)
                 return (sample.stepCount > 0 || sample.distance > 0)
                     && window.intersects(sleepWindow)
@@ -180,12 +200,12 @@ enum AwakeEventDetector {
             inferredEvent(
                 from: cluster,
                 sleepWindow: sleepWindow,
-                movementSamples: session.movementSamples
+                movementSamples: movementSamples
             )
         }
 
         let eventWindows = events.map { DateInterval(start: $0.startDate, end: $0.endDate) }
-        let standEvents = session.movementSamples
+        let standEvents = movementSamples
             .filter { $0.standHourCount > 0 }
             .compactMap { sample -> AwakeEvent? in
                 let sampleWindow = DateInterval(start: sample.startDate, end: sample.endDate)
@@ -198,7 +218,7 @@ enum AwakeEventDetector {
                 return inferredEvent(
                     from: [sample],
                     sleepWindow: sleepWindow,
-                    movementSamples: session.movementSamples
+                    movementSamples: movementSamples
                 )
             }
 
@@ -229,7 +249,10 @@ enum AwakeEventDetector {
         return clusters
     }
 
-    private static func coalescedOutOfBedEvents(_ events: [AwakeEvent]) -> [AwakeEvent] {
+    private static func coalescedOutOfBedEvents(
+        _ events: [AwakeEvent],
+        movementSamples: [MovementSample]
+    ) -> [AwakeEvent] {
         var result: [AwakeEvent] = []
 
         for event in events {
@@ -241,18 +264,41 @@ enum AwakeEventDetector {
                 continue
             }
 
-            result[result.count - 1] = mergedOutOfBedEvent(last, event)
+            result[result.count - 1] = mergedOutOfBedEvent(
+                last,
+                event,
+                movementSamples: movementSamples
+            )
         }
 
         return result
     }
 
-    private static func mergedOutOfBedEvent(_ first: AwakeEvent, _ second: AwakeEvent) -> AwakeEvent {
+    /// Movement is re-measured over the merged span rather than combined from
+    /// the two events' existing totals.
+    ///
+    /// Neither combination was right. `max` takes one trip's worth of evidence
+    /// when the two windows do not overlap, and summing double-counts whenever
+    /// they do — which is common, since each event's evidence window already
+    /// reaches two minutes back and five forward, and events merge at up to a
+    /// twenty-minute gap. Measuring the union once is correct either way.
+    private static func mergedOutOfBedEvent(
+        _ first: AwakeEvent,
+        _ second: AwakeEvent,
+        movementSamples: [MovementSample]
+    ) -> AwakeEvent {
         let startDate = min(first.startDate, second.startDate)
         let endDate = max(first.endDate, second.endDate)
-        let stepCount = max(first.stepCount, second.stepCount)
-        let distance = max(first.distance, second.distance)
-        let standHourCount = max(first.standHourCount, second.standHourCount)
+        let evidence = movementEvidence(
+            in: DateInterval(
+                start: startDate.addingTimeInterval(-2 * 60),
+                end: endDate.addingTimeInterval(5 * 60)
+            ),
+            movementSamples: movementSamples
+        )
+        let stepCount = evidence.steps
+        let distance = evidence.distance
+        let standHourCount = evidence.standHours
         let classification = classify(
             stepCount: stepCount,
             distance: distance,
