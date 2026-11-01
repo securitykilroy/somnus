@@ -1,4 +1,5 @@
 import Foundation
+import HealthKit
 import Testing
 @testable import somnus
 
@@ -255,6 +256,203 @@ struct SleepAnalysisTests {
 
         #expect(averages[sessions[0].nightDate] == 70)
         #expect(averages[sessions[1].nightDate] == 60)
+    }
+
+    @Test func daytimeNapDoesNotStretchTheFollowingNightIntoOneSession() throws {
+        let napStart = date("2026-05-01 15:00")
+        let bedtime = date("2026-05-01 22:00")
+        let sessions = SleepSessionGrouper.primarySessions(
+            from: [
+                SleepStage(
+                    startDate: napStart,
+                    endDate: napStart.addingTimeInterval(60 * 60),
+                    type: .core
+                ),
+                SleepStage(
+                    startDate: bedtime,
+                    endDate: bedtime.addingTimeInterval(8 * 60 * 60),
+                    type: .core
+                ),
+            ],
+            calendar: calendar
+        )
+
+        let session = try #require(sessions.first)
+        #expect(sessions.count == 1)
+        #expect(session.startTime == bedtime)
+        #expect(session.endTime == bedtime.addingTimeInterval(8 * 60 * 60))
+        #expect(session.totalSleep == 8 * 60 * 60)
+        #expect(session.efficiency == 1)
+    }
+
+    @Test func movementEnrichmentPlansBoundedBatchesInsteadOfOneBatchPerNight() {
+        let start = date("2026-01-01 22:00")
+        let sessions = (0..<121).map { offset in
+            let bedtime = calendar.date(byAdding: .day, value: offset, to: start)!
+            return SleepSession(
+                nightDate: calendar.startOfDay(for: bedtime.addingTimeInterval(8 * 60 * 60)),
+                stages: [
+                    SleepStage(
+                        startDate: bedtime,
+                        endDate: bedtime.addingTimeInterval(8 * 60 * 60),
+                        type: .core
+                    )
+                ]
+            )
+        }
+
+        let batches = HealthKitManager.movementSessionBatches(sessions)
+
+        #expect(batches.map(\.count) == [60, 60, 1])
+        #expect(batches.flatMap { $0 }.map(\.id) == sessions.map(\.id))
+    }
+
+    @Test func incrementalSleepSampleMergeAppliesAddsAndDeletes() {
+        let sleepType = HKObjectType.categoryType(forIdentifier: .sleepAnalysis)!
+        let first = HKCategorySample(
+            type: sleepType,
+            value: HKCategoryValueSleepAnalysis.asleepCore.rawValue,
+            start: date("2026-05-01 22:00"),
+            end: date("2026-05-02 00:00")
+        )
+        let replacement = HKCategorySample(
+            type: sleepType,
+            value: HKCategoryValueSleepAnalysis.asleepDeep.rawValue,
+            start: date("2026-05-01 22:00"),
+            end: date("2026-05-02 00:00")
+        )
+
+        let merged = HealthKitManager.mergeSleepSamples(
+            existing: [first.uuid: first],
+            added: [replacement],
+            deletedIDs: [first.uuid]
+        )
+
+        #expect(merged[first.uuid] == nil)
+        #expect(merged[replacement.uuid] === replacement)
+        #expect(merged.count == 1)
+    }
+
+    @Test func healthDataCacheSurvivesRelaunch() throws {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let fileURL = directory.appendingPathComponent("health-cache.json")
+        let bedtime = date("2026-05-01 22:00")
+        let record = HealthKitSleepSampleRecord(
+            id: UUID(),
+            startDate: bedtime,
+            endDate: bedtime.addingTimeInterval(8 * 3600),
+            value: HKCategoryValueSleepAnalysis.asleepCore.rawValue,
+            sourceName: "Watch"
+        )
+        let anchorData = Data([1, 2, 3, 4])
+
+        HealthDataCache(fileURL: fileURL).saveSleepSnapshot(
+            anchorData: anchorData,
+            samples: [record]
+        )
+        let restored = HealthDataCache(fileURL: fileURL).sleepSnapshot()
+
+        #expect(restored.anchorData == anchorData)
+        #expect(restored.samples == [record])
+    }
+
+    @Test func movementCacheRequiresMatchingSessionAndFreshEntry() throws {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let cache = HealthDataCache(fileURL: directory.appendingPathComponent("health-cache.json"))
+        let bedtime = date("2026-05-01 22:00")
+        let session = SleepSession(
+            nightDate: calendar.startOfDay(for: bedtime.addingTimeInterval(8 * 3600)),
+            stages: [
+                SleepStage(startDate: bedtime, endDate: bedtime.addingTimeInterval(8 * 3600), type: .core)
+            ]
+        )
+        let sample = MovementSample(
+            startDate: bedtime.addingTimeInterval(2 * 3600),
+            endDate: bedtime.addingTimeInterval(2 * 3600 + 60),
+            stepCount: 12
+        )
+        let refreshedAt = date("2026-05-02 12:00")
+        cache.saveMovement([sample], for: session, refreshedAt: refreshedAt)
+
+        let fresh = try #require(cache.movement(for: session, now: refreshedAt.addingTimeInterval(60), maxAge: 3600))
+        #expect(fresh.map(\.stepCount) == [12])
+        #expect(cache.movement(for: session, now: refreshedAt.addingTimeInterval(3601), maxAge: 3600) == nil)
+
+        let changed = SleepSession(
+            nightDate: session.nightDate,
+            stages: [
+                SleepStage(startDate: bedtime, endDate: bedtime.addingTimeInterval(7 * 3600), type: .core)
+            ]
+        )
+        #expect(cache.movement(for: changed, now: refreshedAt.addingTimeInterval(60), maxAge: 3600) == nil)
+    }
+
+    @Test func metricCacheRefreshesOnlyAnOverlapAndMergesReplacementDays() {
+        let cache = HealthDataCache(fileURL: nil)
+        let start = date("2026-01-01 00:00")
+        let firstRefresh = date("2026-05-01 12:00")
+        cache.mergeMetricSamples(
+            [
+                DailyMetricSample(date: date("2026-01-01 00:00"), value: 10),
+                DailyMetricSample(date: date("2026-04-30 00:00"), value: 20),
+            ],
+            forKey: "test",
+            replacingFrom: start,
+            refreshedThrough: firstRefresh
+        )
+
+        #expect(cache.metricRefreshStart(
+            forKey: "test",
+            requestedStart: start,
+            end: date("2026-05-02 00:00"),
+            overlap: 3 * 86_400,
+            calendar: calendar
+        ) == date("2026-04-28 00:00"))
+
+        cache.mergeMetricSamples(
+            [DailyMetricSample(date: date("2026-04-30 00:00"), value: 25)],
+            forKey: "test",
+            replacingFrom: date("2026-04-28 00:00"),
+            refreshedThrough: date("2026-05-02 00:00")
+        )
+        let values = cache.metricSamples(
+            forKey: "test",
+            start: start,
+            end: date("2026-05-03 00:00")
+        )
+        #expect(values.map(\.value) == [10, 25])
+    }
+
+    @Test func staleEnrichmentRevisionCannotReplaceNewerLoad() {
+        #expect(!SleepStore.shouldApplyEnrichment(
+            revision: 3,
+            currentRevision: 4,
+            currentNightDates: [date("2026-05-02 00:00")],
+            fetchedNightDates: [date("2026-05-02 00:00")]
+        ))
+        #expect(SleepStore.shouldApplyEnrichment(
+            revision: 4,
+            currentRevision: 4,
+            currentNightDates: [date("2026-05-02 00:00")],
+            fetchedNightDates: [date("2026-05-02 00:00")]
+        ))
+    }
+
+    @Test func failedMetricRefreshPreservesPreviouslyLoadedValues() {
+        struct QueryFailure: Error {}
+        let previous = [DailyMetricSample(date: date("2026-05-01 00:00"), value: 42)]
+        let failed: Result<[DailyMetricSample], Error> = .failure(QueryFailure())
+
+        let resolved = SleepStore.resolveRefresh(failed, preserving: previous)
+
+        #expect(resolved.value.map(\.value) == [42])
+        #expect(resolved.error != nil)
     }
 
     @Test func activityContinuityCorrelationPairsPreviousDayCaloriesWithWaso() {

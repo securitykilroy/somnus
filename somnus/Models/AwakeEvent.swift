@@ -1,6 +1,6 @@
 import Foundation
 
-nonisolated struct MovementSample: Identifiable {
+nonisolated struct MovementSample: Identifiable, Codable, Sendable {
     let startDate: Date
     let endDate: Date
     let stepCount: Double
@@ -386,7 +386,10 @@ nonisolated enum AwakeEventDetector {
         if stepCount > 0 || distance > 0 {
             return .unknown
         }
-        return .restlessInBed
+        // HealthKit returning no samples cannot distinguish "no movement"
+        // from unavailable or denied movement data. Absence of evidence is not
+        // positive evidence that the person stayed restless in bed.
+        return .unknown
     }
 
     private static func confidence(
@@ -399,7 +402,7 @@ nonisolated enum AwakeEventDetector {
         case .likelyOutOfBed:
             return min(1, 0.65 + min(stepCount / 40, 0.20) + min(distance / 40, 0.10) + min(standHourCount * 0.20, 0.20))
         case .unknown:
-            return 0.45
+            return stepCount > 0 || distance > 0 || standHourCount > 0 ? 0.45 : 0
         case .restlessInBed:
             return 0.70
         }

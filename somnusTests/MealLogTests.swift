@@ -36,6 +36,18 @@ struct MealLogStoreTests {
         #expect(read.first?.timestamp == when)
     }
 
+    @Test func corruptLogIsPreservedAndRejectsMutations() throws {
+        let directory = temporaryDirectory()
+        let fileURL = directory.appendingPathComponent("meal-log.json")
+        let corruptData = Data("not valid json".utf8)
+        try corruptData.write(to: fileURL)
+        let store = MealLogStore(directory: directory)
+
+        #expect(store.readOrFail() == nil)
+        #expect(store.append(note: "Must not replace history") == nil)
+        #expect(try Data(contentsOf: fileURL) == corruptData)
+    }
+
     @Test func entriesComeBackNewestFirst() {
         let store = temporaryStore()
         let base = Date(timeIntervalSince1970: 1_800_000_000)

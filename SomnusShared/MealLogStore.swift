@@ -129,7 +129,10 @@ nonisolated struct MealLogStore {
             options: .forMerging,
             error: &coordinatorError
         ) { url in
-            var events = Self.decode(at: url)
+            // A missing file is a new log; malformed bytes are an existing log
+            // we must preserve. Never turn corruption into an empty array and
+            // atomically overwrite the only copy on the next edit.
+            guard var events = Self.decode(at: url) else { return }
             body(&events)
             events.sort { $0.timestamp > $1.timestamp }
 
@@ -145,9 +148,10 @@ nonisolated struct MealLogStore {
         return succeeded && coordinatorError == nil
     }
 
-    private static func decode(at url: URL) -> [MealEvent] {
+    private static func decode(at url: URL) -> [MealEvent]? {
+        guard FileManager.default.fileExists(atPath: url.path) else { return [] }
         guard let data = try? Data(contentsOf: url),
-              let events = try? decoder.decode([MealEvent].self, from: data) else { return [] }
+              let events = try? decoder.decode([MealEvent].self, from: data) else { return nil }
         return events.sorted { $0.timestamp > $1.timestamp }
     }
 

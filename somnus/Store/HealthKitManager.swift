@@ -1,16 +1,41 @@
 import Foundation
 import HealthKit
 
-final class HealthKitManager: @unchecked Sendable {
+nonisolated final class HealthKitManager: @unchecked Sendable {
     private let store = HKHealthStore()
     private let observerLock = NSLock()
+    private let sleepStateLock = NSLock()
+    private let healthDataCache: HealthDataCache
     /// Guarded by `observerLock`, and reached from HealthKit's own callback
     /// queue rather than the main actor.
     nonisolated(unsafe) private var sleepObserverQuery: HKObserverQuery?
+    /// The anchor and sample cache are updated together under `sleepStateLock`.
+    /// The initial query fills the cache; later refreshes ask HealthKit only for
+    /// additions and deletions since that query.
+    nonisolated(unsafe) private var sleepQueryAnchor: HKQueryAnchor?
+    nonisolated(unsafe) private var cachedSleepSamples: [UUID: HealthKitSleepSampleRecord] = [:]
 
     struct TimedQuantitySample {
         let startDate: Date
         let value: Double
+    }
+
+    init(cacheURL: URL? = HealthDataCache.defaultFileURL()) {
+        let cache = HealthDataCache(fileURL: cacheURL)
+        healthDataCache = cache
+        let snapshot = cache.sleepSnapshot()
+        // Treat the on-disk cache as untrusted derived data. A truncated or
+        // manually edited cache must never crash launch because it happens to
+        // contain the same HealthKit UUID twice; the newest decoded value wins.
+        cachedSleepSamples = snapshot.samples.reduce(into: [:]) { records, sample in
+            records[sample.id] = sample
+        }
+        if let anchorData = snapshot.anchorData {
+            sleepQueryAnchor = try? NSKeyedUnarchiver.unarchivedObject(
+                ofClass: HKQueryAnchor.self,
+                from: anchorData
+            )
+        }
     }
 
     @MainActor
@@ -92,86 +117,163 @@ final class HealthKitManager: @unchecked Sendable {
 
     func fetchAllSleepSamples() async throws -> [SleepSession] {
         let sleepType = HKObjectType.categoryType(forIdentifier: .sleepAnalysis)!
-        let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
+        let anchor = currentSleepQueryAnchor()
 
-        let samples: [HKSample] = try await withCheckedThrowingContinuation { continuation in
-            let query = HKSampleQuery(
-                sampleType: sleepType,
+        let changes: (added: [HKCategorySample], deletedIDs: Set<UUID>, anchor: HKQueryAnchor?) =
+            try await withCheckedThrowingContinuation { continuation in
+            let query = HKAnchoredObjectQuery(
+                type: sleepType,
                 predicate: nil,
+                anchor: anchor,
                 limit: HKObjectQueryNoLimit,
-                sortDescriptors: [sortDescriptor]
-            ) { _, result, error in
+                resultsHandler: { _, added, deleted, newAnchor, error in
                 if let error {
                     continuation.resume(throwing: error)
                 } else {
-                    continuation.resume(returning: result ?? [])
+                    continuation.resume(returning: (
+                        added: (added ?? []).compactMap { $0 as? HKCategorySample },
+                        deletedIDs: Set((deleted ?? []).map(\.uuid)),
+                        anchor: newAnchor
+                    ))
                 }
-            }
+            })
             store.execute(query)
         }
 
-        let categorySamples = samples.compactMap { $0 as? HKCategorySample }
-        return Self.groupIntoSessions(categorySamples, movementSamples: [])
+        let sampleRecords = applySleepChanges(changes)
+        return Self.groupIntoSessions(sampleRecords, movementSamples: [])
     }
 
-    /// How many nights are enriched at once. The loop used to be fully serial,
-    /// which on a three-year history meant well over two thousand HealthKit
-    /// round trips one after another; unbounded concurrency is no better, since
-    /// HealthKit serialises internally and the queue just grows.
-    private static let enrichmentConcurrency = 8
+    private func currentSleepQueryAnchor() -> HKQueryAnchor? {
+        sleepStateLock.lock()
+        defer { sleepStateLock.unlock() }
+        return sleepQueryAnchor
+    }
+
+    private func applySleepChanges(
+        _ changes: (added: [HKCategorySample], deletedIDs: Set<UUID>, anchor: HKQueryAnchor?)
+    ) -> [HealthKitSleepSampleRecord] {
+        sleepStateLock.lock()
+        cachedSleepSamples = Self.mergeSleepRecords(
+            existing: cachedSleepSamples,
+            added: changes.added.map(Self.sleepRecord(from:)),
+            deletedIDs: changes.deletedIDs
+        )
+        sleepQueryAnchor = changes.anchor
+        let records = cachedSleepSamples.values.sorted { lhs, rhs in
+            if lhs.startDate != rhs.startDate { return lhs.startDate < rhs.startDate }
+            return lhs.id.uuidString < rhs.id.uuidString
+        }
+        let anchorData = changes.anchor.flatMap {
+            try? NSKeyedArchiver.archivedData(withRootObject: $0, requiringSecureCoding: true)
+        }
+        sleepStateLock.unlock()
+
+        healthDataCache.saveSleepSnapshot(anchorData: anchorData, samples: records)
+        return records
+    }
+
+    private static func sleepRecord(from sample: HKCategorySample) -> HealthKitSleepSampleRecord {
+        HealthKitSleepSampleRecord(
+            id: sample.uuid,
+            startDate: sample.startDate,
+            endDate: sample.endDate,
+            value: sample.value,
+            sourceName: sample.sourceRevision.source.name
+        )
+    }
+
+    private static func mergeSleepRecords(
+        existing: [UUID: HealthKitSleepSampleRecord],
+        added: [HealthKitSleepSampleRecord],
+        deletedIDs: Set<UUID>
+    ) -> [UUID: HealthKitSleepSampleRecord] {
+        var merged = existing
+        for id in deletedIDs { merged.removeValue(forKey: id) }
+        for sample in added { merged[sample.id] = sample }
+        return merged
+    }
+
+    static func mergeSleepSamples(
+        existing: [UUID: HKCategorySample],
+        added: [HKCategorySample],
+        deletedIDs: Set<UUID>
+    ) -> [UUID: HKCategorySample] {
+        var merged = existing
+        for id in deletedIDs {
+            merged.removeValue(forKey: id)
+        }
+        for sample in added {
+            merged[sample.uuid] = sample
+        }
+        return merged
+    }
+
+    /// Sleep windows per steps, distance, or stand-hour query. A three-year
+    /// history now costs three queries per chunk instead of three per night.
+    private static let movementWindowChunkSize = 60
 
     /// Sleep windows per heart-rate query.
     private static let heartRateWindowChunkSize = 60
 
     func enrichSessionsWithMovement(_ sessions: [SleepSession]) async throws -> [SleepSession] {
         guard !sessions.isEmpty else { return [] }
+        var enriched = sessions
+        let indicesByID = Dictionary(uniqueKeysWithValues: sessions.enumerated().map { ($0.element.id, $0.offset) })
+        let now = Date()
+        var uncached: [SleepSession] = []
 
-        return try await withThrowingTaskGroup(of: (Int, SleepSession).self) { group in
-            var enriched = sessions
-            var nextIndex = 0
-            var inFlight = 0
+        for session in sessions {
+            let age = now.timeIntervalSince(session.nightDate)
+            let maxCacheAge: TimeInterval = age < 3 * 86_400 ? 6 * 3600 : 30 * 86_400
+            if let samples = healthDataCache.movement(
+                for: session,
+                now: now,
+                maxAge: maxCacheAge
+            ), let index = indicesByID[session.id] {
+                enriched[index] = SleepSession(copying: session, movementSamples: samples)
+            } else {
+                uncached.append(session)
+            }
+        }
 
-            func addTask(for index: Int) {
-                let session = sessions[index]
-                group.addTask { [self] in
-                    async let movementSamples = fetchMovementSamples(
-                        in: AwakeEventDetector.sleepMovementEvidenceWindow(for: session)
-                    )
-                    async let standSamples = fetchStandHourSamples(
-                        in: AwakeEventDetector.standEvidenceWindow(for: session)
-                    )
-                    let samples = try await movementSamples + standSamples
-                    return (index, SleepSession(copying: session, movementSamples: samples))
+        for batch in Self.movementSessionBatches(uncached) {
+            let windows = batch.compactMap(AwakeEventDetector.sleepMovementEvidenceWindow(for:))
+            async let movementSamples = fetchMovementSamples(in: windows)
+            async let standSamples = fetchStandHourSamples(in: windows)
+            let samples = try await movementSamples + standSamples
+
+            var cacheUpdates: [(session: SleepSession, samples: [MovementSample])] = []
+            for session in batch {
+                guard let index = indicesByID[session.id],
+                      let window = AwakeEventDetector.sleepMovementEvidenceWindow(for: session) else {
+                    continue
                 }
-            }
-
-            while nextIndex < sessions.count, inFlight < Self.enrichmentConcurrency {
-                addTask(for: nextIndex)
-                nextIndex += 1
-                inFlight += 1
-            }
-
-            while let (index, session) = try await group.next() {
-                enriched[index] = session
-                inFlight -= 1
-                if nextIndex < sessions.count {
-                    addTask(for: nextIndex)
-                    nextIndex += 1
-                    inFlight += 1
+                let sessionSamples = samples.filter {
+                    $0.startDate < window.end && $0.endDate > window.start
                 }
+                enriched[index] = SleepSession(copying: session, movementSamples: sessionSamples)
+                cacheUpdates.append((session: session, samples: sessionSamples))
             }
+            healthDataCache.saveMovement(cacheUpdates, refreshedAt: now)
+        }
 
-            return enriched
+        return enriched
+    }
+
+    static func movementSessionBatches(_ sessions: [SleepSession]) -> [[SleepSession]] {
+        stride(from: 0, to: sessions.count, by: movementWindowChunkSize).map { offset in
+            Array(sessions[offset..<min(offset + movementWindowChunkSize, sessions.count)])
         }
     }
 
-    private func fetchMovementSamples(in window: DateInterval?) async throws -> [MovementSample] {
-        guard let window else { return [] }
+    private func fetchMovementSamples(in windows: [DateInterval]) async throws -> [MovementSample] {
+        guard !windows.isEmpty else { return [] }
 
         async let steps = fetchQuantityMovementSamples(
             identifier: .stepCount,
             unit: .count(),
-            in: window
+            in: windows
         ) { quantitySample, value in
             MovementSample(
                 startDate: quantitySample.startDate,
@@ -183,7 +285,7 @@ final class HealthKitManager: @unchecked Sendable {
         async let distance = fetchQuantityMovementSamples(
             identifier: .distanceWalkingRunning,
             unit: .meter(),
-            in: window
+            in: windows
         ) { quantitySample, value in
             MovementSample(
                 startDate: quantitySample.startDate,
@@ -199,11 +301,11 @@ final class HealthKitManager: @unchecked Sendable {
     private func fetchQuantityMovementSamples(
         identifier: HKQuantityTypeIdentifier,
         unit: HKUnit,
-        in window: DateInterval,
+        in windows: [DateInterval],
         makeSample: @escaping @Sendable (HKQuantitySample, Double) -> MovementSample
     ) async throws -> [MovementSample] {
         let quantityType = HKQuantityType.quantityType(forIdentifier: identifier)!
-        let predicate = HKQuery.predicateForSamples(withStart: window.start, end: window.end)
+        let predicate = Self.samplePredicate(for: windows)
         let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
 
         let samples: [HKSample] = try await withCheckedThrowingContinuation { continuation in
@@ -230,11 +332,11 @@ final class HealthKitManager: @unchecked Sendable {
         }
     }
 
-    private func fetchStandHourSamples(in window: DateInterval?) async throws -> [MovementSample] {
-        guard let window else { return [] }
+    private func fetchStandHourSamples(in windows: [DateInterval]) async throws -> [MovementSample] {
+        guard !windows.isEmpty else { return [] }
 
         let standType = HKObjectType.categoryType(forIdentifier: .appleStandHour)!
-        let predicate = HKQuery.predicateForSamples(withStart: window.start, end: window.end)
+        let predicate = Self.samplePredicate(for: windows)
         let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
 
         let samples: [HKSample] = try await withCheckedThrowingContinuation { continuation in
@@ -268,6 +370,16 @@ final class HealthKitManager: @unchecked Sendable {
         }
     }
 
+    private static func samplePredicate(for windows: [DateInterval]) -> NSPredicate {
+        let predicates = windows.map {
+            HKQuery.predicateForSamples(withStart: $0.start, end: $0.end)
+        }
+        if predicates.count == 1 {
+            return predicates[0]
+        }
+        return NSCompoundPredicate(orPredicateWithSubpredicates: predicates)
+    }
+
     private func fetchCumulativeQuantity(
         identifier: HKQuantityTypeIdentifier,
         unit: HKUnit,
@@ -295,53 +407,47 @@ final class HealthKitManager: @unchecked Sendable {
     }
 
     private static func groupIntoSessions(
-        _ samples: [HKCategorySample],
+        _ samples: [HealthKitSleepSampleRecord],
         movementSamples: [MovementSample]
     ) -> [SleepSession] {
-        let calendar = Calendar.current
-        var sessionMap: [Date: [SleepStage]] = [:]
-
-        for sample in samples {
-            guard let stageType = SleepStageType.from(sample.value) else { continue }
-
-            // Assign to a night using noon-to-noon window:
-            // samples before noon belong to the current calendar day (the morning of that night),
-            // samples at/after noon belong to the next calendar day.
-            let midpoint = Date(timeIntervalSince1970:
-                (sample.startDate.timeIntervalSince1970 + sample.endDate.timeIntervalSince1970) / 2)
-            let hour = calendar.component(.hour, from: midpoint)
-            let morningDate: Date
-            if hour < 12 {
-                morningDate = calendar.startOfDay(for: midpoint)
-            } else {
-                let nextDay = calendar.date(byAdding: .day, value: 1, to: midpoint)!
-                morningDate = calendar.startOfDay(for: nextDay)
-            }
-
-            let stage = SleepStage(
-                id: sample.uuid,
+        let stages = samples.compactMap { sample -> SleepStage? in
+            guard let stageType = SleepStageType.from(sample.value) else { return nil }
+            return SleepStage(
+                id: sample.id,
                 startDate: sample.startDate,
                 endDate: sample.endDate,
                 type: stageType,
-                sourceName: sample.sourceRevision.source.name,
-                healthKitUUID: sample.uuid
+                sourceName: sample.sourceName,
+                healthKitUUID: sample.id
             )
-            sessionMap[morningDate, default: []].append(stage)
         }
-
-        return sessionMap.map { date, stages in
-            let start = stages.map(\.startDate).min() ?? date
-            let end = stages.map(\.endDate).max() ?? date
-            let movements = movementSamples.filter { $0.startDate < end.addingTimeInterval(5 * 60) && $0.endDate > start.addingTimeInterval(-2 * 60) }
-            return SleepSession(
-                nightDate: date,
-                stages: stages.sorted { $0.startDate < $1.startDate },
-                movementSamples: movements
-            )
-        }.sorted { $0.nightDate > $1.nightDate }
+        return SleepSessionGrouper.primarySessions(
+            from: stages,
+            movementSamples: movementSamples
+        )
     }
 
     func fetchDailyCalories(start: Date, end: Date) async throws -> [DailyMetricSample] {
+        let cacheKey = HKQuantityTypeIdentifier.activeEnergyBurned.rawValue
+        let refreshStart = healthDataCache.metricRefreshStart(
+            forKey: cacheKey,
+            requestedStart: start,
+            end: end,
+            overlap: 3 * 86_400
+        )
+        if refreshStart < end {
+            let fresh = try await queryDailyCalories(start: refreshStart, end: end)
+            healthDataCache.mergeMetricSamples(
+                fresh,
+                forKey: cacheKey,
+                replacingFrom: refreshStart,
+                refreshedThrough: end
+            )
+        }
+        return healthDataCache.metricSamples(forKey: cacheKey, start: start, end: end)
+    }
+
+    private func queryDailyCalories(start: Date, end: Date) async throws -> [DailyMetricSample] {
         let calorieType = HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned)!
         let predicate = HKQuery.predicateForSamples(withStart: start, end: end)
         let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
@@ -376,6 +482,26 @@ final class HealthKitManager: @unchecked Sendable {
     /// start/end times here even when richer metrics (like Peak Alpha) stay in
     /// their own store.
     func fetchDailyMindfulMinutes(start: Date, end: Date) async throws -> [DailyMetricSample] {
+        let cacheKey = HKCategoryTypeIdentifier.mindfulSession.rawValue
+        let refreshStart = healthDataCache.metricRefreshStart(
+            forKey: cacheKey,
+            requestedStart: start,
+            end: end,
+            overlap: 3 * 86_400
+        )
+        if refreshStart < end {
+            let fresh = try await queryDailyMindfulMinutes(start: refreshStart, end: end)
+            healthDataCache.mergeMetricSamples(
+                fresh,
+                forKey: cacheKey,
+                replacingFrom: refreshStart,
+                refreshedThrough: end
+            )
+        }
+        return healthDataCache.metricSamples(forKey: cacheKey, start: start, end: end)
+    }
+
+    private func queryDailyMindfulMinutes(start: Date, end: Date) async throws -> [DailyMetricSample] {
         let mindfulType = HKObjectType.categoryType(forIdentifier: .mindfulSession)!
         let predicate = HKQuery.predicateForSamples(withStart: start, end: end)
         let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
@@ -405,6 +531,36 @@ final class HealthKitManager: @unchecked Sendable {
     }
 
     func fetchDailyMetrics(
+        identifier: HKQuantityTypeIdentifier,
+        unit: HKUnit,
+        start: Date,
+        end: Date
+    ) async throws -> [DailyMetricSample] {
+        let cacheKey = identifier.rawValue
+        let refreshStart = healthDataCache.metricRefreshStart(
+            forKey: cacheKey,
+            requestedStart: start,
+            end: end,
+            overlap: 3 * 86_400
+        )
+        if refreshStart < end {
+            let fresh = try await queryDailyMetrics(
+                identifier: identifier,
+                unit: unit,
+                start: refreshStart,
+                end: end
+            )
+            healthDataCache.mergeMetricSamples(
+                fresh,
+                forKey: cacheKey,
+                replacingFrom: refreshStart,
+                refreshedThrough: end
+            )
+        }
+        return healthDataCache.metricSamples(forKey: cacheKey, start: start, end: end)
+    }
+
+    private func queryDailyMetrics(
         identifier: HKQuantityTypeIdentifier,
         unit: HKUnit,
         start: Date,

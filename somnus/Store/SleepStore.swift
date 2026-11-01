@@ -22,6 +22,7 @@ final class SleepStore {
     var sessions: [SleepSession] = []
     var isLoading = false
     var error: Error?
+    private(set) var dataWarnings: [String] = []
 
     /// When the last successful load finished. Views observe this to react to
     /// reloads they did not trigger themselves, such as observer-driven ones.
@@ -46,6 +47,8 @@ final class SleepStore {
     private let healthKit = HealthKitManager()
     private let widgetSnapshots = SleepWidgetSnapshotStore()
     private var loadTask: Task<Void, Never>?
+    private var enrichmentTask: Task<Void, Never>?
+    private var loadRevision = 0
     private var isObservingSleepChanges = false
 
     var lastNight: SleepSession? { sessions.first }
@@ -99,6 +102,35 @@ final class SleepStore {
         return elapsed < 0 || elapsed >= minimumInterval
     }
 
+    nonisolated static func shouldApplyEnrichment(
+        revision: Int,
+        currentRevision: Int,
+        currentNightDates: [Date],
+        fetchedNightDates: [Date]
+    ) -> Bool {
+        revision == currentRevision && currentNightDates == fetchedNightDates
+    }
+
+    nonisolated static func resolveRefresh<Value: Sendable>(
+        _ result: Result<Value, Error>,
+        preserving previous: Value
+    ) -> (value: Value, error: Error?) {
+        switch result {
+        case .success(let value): return (value, nil)
+        case .failure(let error): return (previous, error)
+        }
+    }
+
+    nonisolated private static func capture<Value: Sendable>(
+        _ operation: @escaping @Sendable () async throws -> Value
+    ) async -> Result<Value, Error> {
+        do {
+            return .success(try await operation())
+        } catch {
+            return .failure(error)
+        }
+    }
+
     /// Starts watching HealthKit for newly written sleep samples so a night that
     /// syncs from the watch after launch shows up without user action.
     func startObservingSleepChanges() {
@@ -106,9 +138,12 @@ final class SleepStore {
         isObservingSleepChanges = true
 
         let healthKit = self.healthKit
-        Task { [weak self] in
+        let reload: @MainActor @Sendable () async -> Void = { [weak self] in
+            await self?.load()
+        }
+        Task {
             await healthKit.startObservingSleepChanges {
-                await self?.load()
+                await reload()
             }
         }
     }
@@ -148,6 +183,10 @@ final class SleepStore {
     private func performLoad() async {
         isLoading = true
         error = nil
+        dataWarnings = []
+        loadRevision += 1
+        let revision = loadRevision
+        enrichmentTask?.cancel()
         defer { isLoading = false }
         do {
             try await healthKit.requestAuthorization()
@@ -163,31 +202,67 @@ final class SleepStore {
 
             // Task.detached (not Task {}) so these run on the cooperative thread
             // pool rather than inheriting @MainActor, keeping the UI responsive.
-            Task.detached(priority: .utility) { [weak self] in
+            enrichmentTask = Task.detached(priority: .utility) { [weak self] in
                 guard let enriched = try? await hk.enrichSessionsWithMovement(inWindow) else { return }
+                guard !Task.isCancelled else { return }
                 let byDate = Dictionary(uniqueKeysWithValues: enriched.map { ($0.nightDate, $0) })
                 await MainActor.run { [weak self] in
                     guard let self else { return }
-                    guard sessions.map(\.nightDate) == fetched.map(\.nightDate) else { return }
+                    guard Self.shouldApplyEnrichment(
+                        revision: revision,
+                        currentRevision: loadRevision,
+                        currentNightDates: sessions.map(\.nightDate),
+                        fetchedNightDates: fetched.map(\.nightDate)
+                    ) else { return }
                     sessions = sessions.map { byDate[$0.nightDate] ?? $0 }
                 }
             }
 
-            async let cals    = hk.fetchDailyCalories(start: window.start, end: window.end)
-            async let rhr     = hk.fetchDailyMetrics(identifier: .restingHeartRate,
-                                                     unit: .count().unitDivided(by: .minute()),
-                                                     start: window.start, end: window.end)
-            async let hrv     = hk.fetchDailyMetrics(identifier: .heartRateVariabilitySDNN,
-                                                     unit: .secondUnit(with: .milli),
-                                                     start: window.start, end: window.end)
-            async let sleepHR = hk.fetchSleepHeartRates(sessions: inWindow)
-            async let mindful = hk.fetchDailyMindfulMinutes(start: window.start, end: window.end)
-            // Already filtered inside `fetchDailyCalories`; not re-filtered here.
-            dailyCalories       = (try? await cals)    ?? []
-            dailyRestingHR      = (try? await rhr)     ?? []
-            dailyHRV            = (try? await hrv)     ?? []
-            sleepHeartRates     = (try? await sleepHR) ?? [:]
-            dailyMindfulMinutes = (try? await mindful) ?? []
+            async let cals = Self.capture {
+                try await hk.fetchDailyCalories(start: window.start, end: window.end)
+            }
+            async let rhr = Self.capture {
+                try await hk.fetchDailyMetrics(
+                    identifier: .restingHeartRate,
+                    unit: .count().unitDivided(by: .minute()),
+                    start: window.start,
+                    end: window.end
+                )
+            }
+            async let hrv = Self.capture {
+                try await hk.fetchDailyMetrics(
+                    identifier: .heartRateVariabilitySDNN,
+                    unit: .secondUnit(with: .milli),
+                    start: window.start,
+                    end: window.end
+                )
+            }
+            async let sleepHR = Self.capture {
+                try await hk.fetchSleepHeartRates(sessions: inWindow)
+            }
+            async let mindful = Self.capture {
+                try await hk.fetchDailyMindfulMinutes(start: window.start, end: window.end)
+            }
+
+            let calorieRefresh = Self.resolveRefresh(await cals, preserving: dailyCalories)
+            let restingHRRefresh = Self.resolveRefresh(await rhr, preserving: dailyRestingHR)
+            let hrvRefresh = Self.resolveRefresh(await hrv, preserving: dailyHRV)
+            let sleepHRRefresh = Self.resolveRefresh(await sleepHR, preserving: sleepHeartRates)
+            let mindfulRefresh = Self.resolveRefresh(await mindful, preserving: dailyMindfulMinutes)
+            dailyCalories = calorieRefresh.value
+            dailyRestingHR = restingHRRefresh.value
+            dailyHRV = hrvRefresh.value
+            sleepHeartRates = sleepHRRefresh.value
+            dailyMindfulMinutes = mindfulRefresh.value
+            dataWarnings = [
+                ("Active energy", calorieRefresh.error),
+                ("Resting heart rate", restingHRRefresh.error),
+                ("Heart-rate variability", hrvRefresh.error),
+                ("Sleep heart rate", sleepHRRefresh.error),
+                ("Mindfulness", mindfulRefresh.error),
+            ].compactMap { name, error in
+                error.map { "\(name): \($0.localizedDescription)" }
+            }
             recoveryScores = RecoveryScoreCalculator.scores(
                 sessions: sessions,
                 dailyHRV: dailyHRV,

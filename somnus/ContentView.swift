@@ -10,15 +10,12 @@ struct ContentView: View {
 
     var body: some View {
         TabView {
-            Tab("Overview", systemImage: "moon.fill") {
-                OverviewView()
-            }
-            Tab("Daily", systemImage: "calendar") {
-                DailyView()
-            }
-            Tab("Trends", systemImage: "chart.line.uptrend.xyaxis") {
-                TrendsView()
-            }
+            OverviewView()
+                .tabItem { Label("Overview", systemImage: "moon.fill") }
+            DailyView()
+                .tabItem { Label("Daily", systemImage: "calendar") }
+            TrendsView()
+                .tabItem { Label("Trends", systemImage: "chart.line.uptrend.xyaxis") }
         }
         .task {
             try? await intentStore.loadAsync()

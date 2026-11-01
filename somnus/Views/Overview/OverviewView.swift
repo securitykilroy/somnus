@@ -20,6 +20,14 @@ struct OverviewView: View {
                 } else if let session = store.lastNight {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 24) {
+                            if !store.dataWarnings.isEmpty {
+                                Label(
+                                    "Some Health data could not refresh. Showing the last available values.",
+                                    systemImage: "exclamationmark.triangle"
+                                )
+                                .font(.footnote)
+                                .foregroundStyle(.orange)
+                            }
                             lastNightHeader(session)
                             RecoveryScoreCardView(score: store.lastNightRecoveryScore)
                             SleepIntentCaptureCard()

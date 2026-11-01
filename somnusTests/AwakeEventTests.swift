@@ -77,7 +77,7 @@ struct AwakeEventTests {
         #expect(first.id == second.id)
     }
 
-    @Test func awakeEventWithoutMovementStaysRestlessInBed() {
+    @Test func awakeEventWithoutMovementEvidenceIsUnknown() {
         let start = date("2026-05-01 22:00")
         let session = SleepSession(
             nightDate: calendar.startOfDay(for: start.addingTimeInterval(9 * 3600)),
@@ -89,7 +89,8 @@ struct AwakeEventTests {
         )
 
         #expect(session.awakeEvents.count == 1)
-        #expect(session.awakeEvents.first?.classification == .restlessInBed)
+        #expect(session.awakeEvents.first?.classification == .unknown)
+        #expect(session.awakeEvents.first?.confidence == 0)
         #expect(session.movementConfirmedAwakeningCount == 0)
         #expect(session.likelyOutOfBedDuration == 0)
     }

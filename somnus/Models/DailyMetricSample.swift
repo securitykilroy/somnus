@@ -1,13 +1,13 @@
 import Foundation
 
-struct DailyMetricSample: Identifiable {
+nonisolated struct DailyMetricSample: Identifiable, Sendable {
     let date: Date
     let value: Double
 
     var id: Date { date }
 }
 
-enum MetricDataQuality {
+nonisolated enum MetricDataQuality {
     static let maximumPlausibleDailyActiveCalories = 6_000.0
 
     static func plausibleDailyActiveCalories(_ samples: [DailyMetricSample]) -> [DailyMetricSample] {
